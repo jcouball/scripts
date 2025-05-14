@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/jcouball/scripts/compare/v0.1.1...v0.1.2) (2025-05-14)
+
+
+### Other Changes
+
+* **git-clone:** Make improvements to the git-clone script ([c5b5092](https://github.com/jcouball/scripts/commit/c5b50923a4d7b7e97edbc7d0f9724af9f4dc2e49))
+
 ## [0.1.1](https://github.com/jcouball/scripts/compare/v0.1.0...v0.1.1) (2025-05-14)
 
 
