@@ -1,0 +1,123 @@
+#!/bin/bash
+
+# launch-keeper: Backup and restore auto-launch configuration files on macOS
+
+set -euo pipefail
+
+BACKUP_DIR="$HOME/AutoLaunch_Backup"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+MODE="${1:-backup}"
+
+USER_LAUNCHAGENTS="$HOME/Library/LaunchAgents"
+RESTORE_DIR="$BACKUP_DIR/latest"
+
+# Ignore these patterns during restore
+IGNORE_PLIST_PATTERNS=(
+  "homebrew.mxcl.*"
+  "com.google.*"
+  "com.docker.*"
+  "us.zoom.*"
+  "com.stclairsoft.*"
+  "com.corecode.*"
+  "com.daisydiskapp.*"
+)
+
+function usage() {
+  cat <<EOF
+launch-keeper: Backup and restore auto-launch configuration files on macOS
+
+This script helps you preserve and restore the configuration of apps and services
+that automatically launch when you log in or boot macOS.
+
+🔹 What it backs up:
+  - Your current login items (apps set to launch at login)
+  - User-level LaunchAgents from ~/Library/LaunchAgents, excluding system or Homebrew-managed files
+  - Active Homebrew services list (for reference)
+
+🔹 Why use it:
+  - Rebuilding a Mac? This lets you restore key automatic behaviors without reinstalling or misconfiguring apps.
+  - Migrating to a new machine? This avoids manual re-setup of login items and background processes.
+
+🔹 How to use:
+  $ ./launch-keeper.sh backup     # Creates a backup
+  $ ./launch-keeper.sh restore    # Restores from the latest backup
+  $ ./launch-keeper.sh --help     # Shows this help message
+
+Notes:
+- The script ignores system-managed and Homebrew-managed services that are better restored by reinstalling those tools.
+- It assumes apps are located in /Applications when restoring login items.
+EOF
+}
+
+function matches_ignore_patterns() {
+  local file="$1"
+  for pattern in "${IGNORE_PLIST_PATTERNS[@]}"; do
+    [[ $(basename "$file") == $pattern ]] && return 0
+  done
+  return 1
+}
+
+function backup() {
+  DEST="$BACKUP_DIR/$TIMESTAMP"
+  mkdir -p "$DEST/user_LaunchAgents" "$DEST/system_info"
+
+  echo "📥 Backing up login items..."
+  osascript -e 'tell application "System Events" to get the name of every login item' > "$DEST/login_items.txt"
+
+  echo "📥 Backing up user LaunchAgents..."
+  for file in "$USER_LAUNCHAGENTS"/*.plist; do
+    [ -f "$file" ] || continue
+    if ! matches_ignore_patterns "$file"; then
+      cp "$file" "$DEST/user_LaunchAgents/"
+    fi
+  done
+
+  echo "📥 Capturing Homebrew services list..."
+  brew services list > "$DEST/system_info/brew_services.txt"
+
+  echo "✅ Backup complete: $DEST"
+  ln -sfn "$DEST" "$RESTORE_DIR"
+}
+
+function restore() {
+  if [ ! -d "$RESTORE_DIR" ]; then
+    echo "❌ No backup found in $RESTORE_DIR. Run with 'backup' first."
+    exit 1
+  fi
+
+  echo "♻️ Restoring user LaunchAgents..."
+  for file in "$RESTORE_DIR/user_LaunchAgents"/*.plist; do
+    [ -f "$file" ] || continue
+    target="$USER_LAUNCHAGENTS/$(basename "$file")"
+    echo "Installing $(basename "$file")"
+    launchctl unload "$target" 2>/dev/null || true
+    cp "$file" "$target"
+    launchctl load "$target"
+  done
+
+  echo "♻️ Restoring login items..."
+  while read -r item; do
+    [ -z "$item" ] && continue
+    echo "Adding login item: $item"
+    osascript -e "tell application \"System Events\" to make new login item with properties {name: \"$item\", path: \"/Applications/$item.app\", hidden:false}" 2>/dev/null || echo "⚠️ Could not add $item (not installed?)"
+  done < "$RESTORE_DIR/login_items.txt"
+
+  echo "✅ Restore complete."
+}
+
+case "$MODE" in
+  backup)
+    backup
+    ;;
+  restore)
+    restore
+    ;;
+  --help|-h)
+    usage
+    ;;
+  *)
+    echo "❌ Invalid argument: $MODE"
+    echo "Usage: $0 [backup|restore|--help|-h]"
+    exit 1
+    ;;
+esac

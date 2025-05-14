@@ -1,0 +1,15 @@
+#!/bin/bash
+echo "git diff-files (index vs. worktree)"
+git diff-files
+echo "----------"
+echo
+
+echo "git diff-index --cached HEAD (repo vs. index)"
+git diff-index --cached HEAD
+echo "----------"
+echo
+
+echo "git diff-index HEAD (repo vs. worktree)"
+git diff-index HEAD
+echo "----------"
+echo

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# List each directory in the PATH on a separate line
+echo "$PATH" | tr ':' '\n'

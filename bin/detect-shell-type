@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# --- Shell info ---
+echo "Shell executable (from \$SHELL): $SHELL"
+echo "Running script name: $0"
+echo
+
+# --- Detect if INTERACTIVE ---
+if [[ $- == *i* ]]; then
+  echo "✅ This shell is INTERACTIVE."
+else
+  echo "❌ This shell is NON-INTERACTIVE."
+fi
+
+# --- Detect if LOGIN shell ---
+if [ -n "$ZSH_VERSION" ]; then
+  # Running inside Zsh
+  if [[ -o login ]]; then
+    echo "✅ This shell is a LOGIN shell (detected via Zsh)."
+  else
+    echo "❌ This shell is a NON-LOGIN shell (detected via Zsh)."
+  fi
+elif [ -n "$BASH_VERSION" ]; then
+  # Running inside Bash
+  if shopt -q login_shell 2>/dev/null; then
+    echo "✅ This shell is a LOGIN shell (detected via Bash)."
+  else
+    echo "❌ This shell is a NON-LOGIN shell (detected via Bash)."
+  fi
+else
+  # Some other shell (e.g., dash, ksh)
+  echo "⚠️  Unknown shell type: cannot determine login shell status reliably."
+fi
+
+# --- Environment details ---
+echo
+echo "TERM: ${TERM:-unset}"
+echo "SSH_CONNECTION: ${SSH_CONNECTION:-unset}"
+echo "PS1: ${PS1:+set} ${PS1:+"(prompt is set)"}"
+echo "Detected Shell Version:"
+echo "  - ZSH_VERSION: ${ZSH_VERSION:-not zsh}"
+echo "  - BASH_VERSION: ${BASH_VERSION:-not bash}"

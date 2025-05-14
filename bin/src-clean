@@ -1,0 +1,546 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'optparse'
+require 'pathname'
+require 'find'
+require 'fileutils'
+require 'digest'
+# Optional: require 'logger' # Only needed if you intend to pass a Logger object
+
+# Script Configuration
+APP_NAME = File.basename($PROGRAM_NAME)
+APP_VERSION = '2.3.3-ruby' # Applied more Rubocop fixes
+
+# Handles parsing command-line options
+class OptionsParser
+  DEFAULT_OPTIONS = {
+    dry_run: false,
+    verbose: false,
+    quiet: false,
+    compare_mode: :cmp, # :cmp or :hash
+    progress_interval: 100, # Default progress update interval
+    exclude_patterns: [] # Store exclusion patterns
+  }.freeze
+
+  attr_reader :options, :source_dir, :target_dir
+
+  def self.parse(argv)
+    new.parse(argv)
+  end
+
+  def initialize
+    @options = DEFAULT_OPTIONS.dup
+    @options[:exclude_patterns] = [] # Ensure it's a new array instance
+  end
+
+  # rubocop:disable Metrics/MethodLength
+  def parse(argv)
+    parser = OptionParser.new do |opts|
+      opts.banner = <<~BANNER
+        Usage: #{APP_NAME} [options] <source_directory> <target_directory>
+
+        Scans the source directory recursively, excluding paths matching --exclude patterns.
+        1. If a non-excluded file is NOT found in the same relative path within the target,
+           the source file is MOVED to the target directory.
+        2. If a non-excluded file IS found in the same relative path within the target
+           AND has identical content, the source FILE is deleted.
+        3. Afterwards, any non-excluded source directory that is empty is also deleted.
+
+        Shows progress counter when not verbose or quiet.
+
+        Arguments:
+          <source_directory>  Path to the directory to scan and modify.
+          <target_directory>  Path to the directory to compare against and move files into.
+      BANNER
+
+      define_options(opts) # Extracted option definitions
+    end
+
+    parser.parse!(argv)
+
+    validate_args!(argv)
+    @source_dir = Pathname.new(argv[0]).expand_path
+    @target_dir = Pathname.new(argv[1]).expand_path
+    validate_paths!
+
+    self
+  rescue OptionParser::InvalidArgument, OptionParser::MissingArgument => e
+    raise "Argument Error: #{e.message}. Use -h for help."
+  end
+  # rubocop:enable Metrics/MethodLength
+
+  private
+
+  # Helper method to define command line options
+  # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+  def define_options(opts)
+    opts.separator "\nOptions:"
+    opts.on('-n', '--dry-run', 'Show what would be deleted/moved without modifying filesystems') do
+      @options[:dry_run] = true
+    end
+    opts.on('-v', '--verbose', 'Enable verbose output (overridden by -q)') do
+      @options[:verbose] = true
+    end
+    opts.on('-q', '--quiet', 'Suppress all non-error output (overrides -v)') do
+      @options[:quiet] = true
+    end
+    opts.on('-x PATTERN', '--exclude PATTERN',
+            'Exclude files/directories matching PATTERN (relative to source).',
+            'Supports glob syntax like **, *, ?. Use quotes for patterns with spaces.',
+            'Can be used multiple times (e.g., -x "**/*.tmp" -x ".git").') do |pattern|
+      if pattern.end_with?('/') && pattern.length > 1 # Ignore if pattern is just "/"
+        raise OptionParser::InvalidArgument, <<~ERROR_MSG.strip
+          Exclusion pattern '#{pattern}' ends with '/'.
+          This pattern format is not effective for excluding directories with this tool.
+          Please use the pattern without the trailing slash: '#{pattern.chomp('/')}'
+        ERROR_MSG
+      end
+
+      @options[:exclude_patterns] << pattern # Store the valid pattern
+    end
+    opts.on('--hash-compare', 'Compare files using sha256 hash instead of binary cmp') do
+      @options[:compare_mode] = :hash
+    end
+    opts.on('--progress-interval N', Integer, 'Print progress every N items (default: 100)') do |n|
+      @options[:progress_interval] = n <= 0 ? 1 : n # Ensure interval is positive
+    end
+    opts.on_tail('-h', '--help', 'Show this help message') do
+      puts opts
+      exit
+    end
+    opts.on_tail('--version', 'Show version') do
+      puts "#{APP_NAME} version #{APP_VERSION}"
+      exit
+    end
+  end
+  # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+  def validate_args!(argv)
+    raise OptionParser::MissingArgument, 'Source and target directories are required.' if argv.length != 2
+  end
+
+  def validate_paths!
+    raise "Source directory '#{@source_dir}' not found or not a directory." unless @source_dir.directory?
+    raise "Target directory '#{@target_dir}' not found or not a directory." unless @target_dir.directory?
+    raise 'Source and target directories cannot be the same.' if @source_dir == @target_dir
+  end
+end
+
+# Core logic for cleaning the source directory
+# rubocop:disable Metrics/ClassLength
+class SourceCleaner
+  # Maximum length of progress message to overwrite cleanly
+  PROGRESS_LINE_MAX_LEN = 80
+  # Flags for File.fnmatch?
+  FNMATCH_FLAGS = File::FNM_PATHNAME | File::FNM_DOTMATCH
+
+  # Accepts optional logger for testability (duck-typed: needs info, debug, error methods)
+  def initialize(source_dir, target_dir, options, logger: nil)
+    @source_dir = source_dir
+    @target_dir = target_dir
+    @options = options
+    @logger = logger # Optional logger dependency
+    @item_count = 0
+    @processed_count = 0 # Track non-excluded items processed
+    @dirs_to_check = []
+    @exclude_patterns = @options[:exclude_patterns] || []
+  end
+
+  def run
+    log_configuration_summary
+    process_items
+    process_directories
+    finalize_progress
+    log_verbose 'Scan complete.'
+  end
+
+  private
+
+  # --- Configuration Logging ---
+
+  def log_configuration_summary
+    log_verbose "Starting scan of source directory: #{@source_dir}"
+    log_verbose "Target directory: #{@target_dir}"
+    log_verbose "Dry run mode: #{@options[:dry_run]}"
+    log_verbose "Compare mode: #{@options[:compare_mode]}"
+    log_verbose "Progress interval: #{@options[:progress_interval]}"
+
+    return if @exclude_patterns.empty?
+
+    log_verbose 'Applying exclusion patterns:'
+    @exclude_patterns.each { |p| log_verbose "  - #{p}" }
+  end
+
+  # --- Traversal and Item Processing ---
+
+  def process_items
+    Find.find(@source_dir) do |path_str|
+      @item_count += 1 # Count all items found
+      path = Pathname.new(path_str)
+      next if path == @source_dir # Skip root itself explicitly
+
+      relative_path = relative_path_str(path)
+
+      next if exclude_and_prune_if_needed(path, relative_path)
+
+      process_found_item(path)
+    end
+  rescue Errno::ENOENT => e
+    log_verbose "Warning: Path not found during scan - likely pruned or modified: #{e.message}"
+  end
+
+  # Helper for processing a single non-excluded item found by Find.find
+  def process_found_item(path)
+    @processed_count += 1
+    update_progress(@processed_count)
+    handle_found_item(path)
+  end
+
+  # Helper for checking exclusions and pruning directories
+  # Returns true if item should be skipped, false otherwise
+  def exclude_and_prune_if_needed(path, relative_path)
+    matching_pattern = item_excluded?(relative_path)
+    return false unless matching_pattern # Not excluded, continue processing
+
+    log_verbose "Excluding: '#{relative_path}' (matches pattern: '#{matching_pattern}')"
+    Find.prune if path.directory? # Prune if it's a directory
+    true # Signal that item should be skipped
+  end
+
+  # Helper method to check exclusion patterns
+  # Returns the matching pattern string if excluded, nil otherwise.
+  def item_excluded?(relative_path_str)
+    @exclude_patterns.find do |pattern|
+      File.fnmatch?(pattern, relative_path_str, FNMATCH_FLAGS)
+    end
+  end
+
+  # --- Item Handling ---
+
+  def handle_found_item(path)
+    if path.file?
+      handle_found_file(path)
+    elsif path.directory?
+      handle_found_directory(path)
+    else
+      log_verbose "Skipping item (not file or directory): #{relative_path_str(path)}"
+    end
+  end
+
+  def handle_found_file(path)
+    log_verbose "Processing file: #{relative_path_str(path)}"
+    target_path = corresponding_target_path(path)
+
+    if target_path.exist?
+      handle_existing_target(path, target_path)
+    else
+      handle_missing_target(path, target_path)
+    end
+  end
+
+  # Helper for when target path exists
+  def handle_existing_target(source_path, target_path)
+    if target_path.file?
+      log_verbose "  Corresponding file exists in target: '#{target_path}'"
+      delete_source_file(source_path) if files_identical?(source_path, target_path)
+    else
+      log_verbose "  Skipping: Target path exists but is not a file: '#{target_path}'"
+    end
+  end
+
+  # Helper for when target path is missing
+  def handle_missing_target(source_path, target_path)
+    log_verbose "  Corresponding path does not exist in target: '#{target_path}'"
+    move_source_file(source_path, target_path)
+  end
+
+  def handle_found_directory(path)
+    @dirs_to_check << path
+  end
+
+  # --- Directory Processing (Post Traversal) ---
+
+  def process_directories
+    log_verbose "Processing #{pluralize(@dirs_to_check.size, 'directory')} for emptiness..."
+    sorted_dirs = @dirs_to_check.sort_by { |p| -p.to_s.length }
+
+    sorted_dirs.each do |dir_path|
+      next unless dir_path.exist? && dir_path.directory?
+
+      delete_empty_source_dir(dir_path)
+    end
+  end
+
+  # --- File Comparison ---
+
+  def files_identical?(source_path, target_path)
+    identical = compare_content(source_path, target_path)
+    log_comparison_result(identical, source_path, target_path)
+    identical
+  rescue Errno::ENOENT => e
+    log_verbose "  Comparison error: File not found - #{e.message}"
+    false
+  rescue StandardError => e
+    log_verbose "  Comparison error: #{e.class} - #{e.message}"
+    false
+  end
+
+  def compare_content(source_path, target_path)
+    if @options[:compare_mode] == :cmp
+      FileUtils.compare_file(source_path.to_s, target_path.to_s)
+    else # :hash
+      Digest::SHA256.file(source_path.to_s).hexdigest == Digest::SHA256.file(target_path.to_s).hexdigest
+    end
+  end
+
+  def log_comparison_result(identical, source_path, target_path)
+    method = @options[:compare_mode] == :cmp ? 'cmp' : 'sha256'
+    if identical
+      log_verbose "  Files have IDENTICAL content (via #{method})."
+    else
+      log_verbose "  Files differ or comparison error for '#{source_path}' vs '#{target_path}' (via #{method})."
+    end
+  end
+
+  # --- Deletion Logic ---
+
+  def delete_source_file(path)
+    rel_path = relative_path_str(path)
+    if @options[:dry_run]
+      log_verbose "  Dry run: Would delete identical file '#{path}'"
+      log_output "deleted file: #{rel_path}"
+    else
+      log_verbose "  Attempting to delete identical file: '#{path}'"
+      delete_item(path, 'file', rel_path)
+    end
+  end
+
+  # --- Move Logic ---
+
+  def move_source_file(source_path, target_path)
+    rel_path = relative_path_str(source_path)
+    if @options[:dry_run]
+      log_verbose "  Dry run: Would move file '#{source_path}' to '#{target_path}'"
+      log_output "moved file: #{rel_path}"
+    else
+      log_verbose "  Attempting to move file '#{source_path}' to '#{target_path}'"
+      move_item(source_path, target_path, rel_path)
+    end
+  end
+
+  # rubocop:disable Metrics/MethodLength
+  # Method length disabled as it's mostly specific error rescues
+  def move_item(source_path, target_path, rel_path)
+    perform_move(source_path, target_path)
+    log_verbose '    Successfully moved file.'
+    log_output "moved file: #{rel_path}"
+  rescue Errno::ENOENT => e
+    log_move_error(source_path, target_path, e, 'Source not found or target path invalid')
+  rescue Errno::EACCES, Errno::EPERM => e
+    log_move_error(source_path, target_path, e, 'Permission denied')
+  rescue Errno::ENOSPC => e
+    log_move_error(source_path, target_path, e, 'No space left on device')
+  rescue Errno::ENOTDIR, Errno::EEXIST => e
+    log_move_error(source_path, target_path, e,
+                   'Cannot create target directory (path component is not a directory or exists as file)')
+  rescue StandardError => e
+    log_move_error(source_path, target_path, e, 'Unexpected error')
+  end
+  # rubocop:enable Metrics/MethodLength
+
+  # Helper to perform the actual move operations (mkdir_p, move)
+  def perform_move(source_path, target_path)
+    target_dir = target_path.dirname
+    log_verbose "    Ensuring target directory exists: '#{target_dir}'"
+    FileUtils.mkdir_p(target_dir.to_s)
+    log_verbose "    Moving '#{source_path}' to '#{target_path}'..."
+    FileUtils.move(source_path.to_s, target_path.to_s)
+  end
+
+  # Helper to log errors during move_item
+  def log_move_error(source, target, error, context)
+    msg = "Error: #{context} moving file '#{source}' to '#{target}' " \
+          "- #{error.class}: #{error.message}"
+    log_error msg
+  end
+
+  # --- Empty Directory Deletion Logic ---
+
+  def delete_empty_source_dir(path)
+    return unless path.exist? && path.directory?
+
+    rel_path = relative_path_str(path)
+    if @options[:dry_run]
+      try_dry_run_delete_empty_dir(path, rel_path)
+    else
+      try_delete_empty_dir(path, rel_path)
+    end
+  end
+
+  def try_dry_run_delete_empty_dir(path, rel_path)
+    if dir_empty?(path)
+      log_verbose "  Dry run: Directory '#{path}' appears empty, would delete."
+      log_output "deleted empty dir: #{rel_path}"
+    else
+      log_verbose "  Dry run: Directory '#{path}' not empty, would keep."
+    end
+  rescue SystemCallError => e
+    log_verbose "  Dry run: Error checking if dir empty '#{path}' - #{e.message}"
+  end
+
+  def handle_rmdir_success(path, rel_path)
+    log_verbose "  Successfully deleted empty directory: '#{path}'"
+    log_output "deleted empty dir: #{rel_path}"
+  end
+
+  # rubocop:disable Metrics/MethodLength
+  # Method length disabled as it's mostly specific error rescues
+  def try_delete_empty_dir(path, rel_path)
+    unless dir_empty?(path)
+      log_verbose "  Directory not empty: '#{path}'"
+      return
+    end
+
+    log_verbose "  Attempting to remove empty directory: '#{path}'"
+    Dir.rmdir(path.to_s)
+    handle_rmdir_success(path, rel_path)
+  rescue Errno::ENOTEMPTY
+    log_verbose "  Directory became non-empty before removal: '#{path}'"
+  rescue Errno::ENOENT
+    log_verbose "  Directory already removed: '#{path}'"
+  rescue Errno::EACCES, Errno::EPERM => e
+    log_rmdir_error(path, rel_path, e, 'Permission denied')
+  rescue StandardError => e
+    log_rmdir_error(path, rel_path, e, 'Unexpected error')
+  end
+  # rubocop:enable Metrics/MethodLength
+
+  # Helper to log errors during try_delete_empty_dir
+  def log_rmdir_error(path, rel_path, error, context)
+    msg = "Error: #{context} removing directory '#{path}' (relative: '#{rel_path}') " \
+          "- #{error.class}: #{error.message}"
+    log_error msg
+  end
+
+  def delete_item(path, item_type, rel_path)
+    FileUtils.rm(path.to_s)
+    log_verbose "  Successfully deleted #{item_type}: '#{path}'"
+    log_output "deleted #{item_type}: #{rel_path}"
+  rescue Errno::ENOENT
+    log_verbose "  #{item_type.capitalize} '#{path}' already removed."
+  rescue Errno::EACCES, Errno::EPERM => e
+    log_error "Error: Permission denied deleting #{item_type} '#{path}' (relative: '#{rel_path}') - #{e.message}"
+  rescue StandardError => e
+    log_error "Error: Unexpected error deleting #{item_type} '#{path}' - #{e.class}: #{e.message}"
+  end
+
+  # --- Helpers & Logging ---
+
+  def corresponding_target_path(source_path)
+    @target_dir + relative_path_obj(source_path)
+  end
+
+  def relative_path_obj(source_path)
+    abs_source_path = source_path.absolute? ? source_path : @source_dir + source_path
+    abs_source_path.relative_path_from(@source_dir)
+  rescue ArgumentError
+    safe_sub = abs_source_path.to_s.sub(@source_dir.to_s, '').sub(%r{^/}, '')
+    Pathname.new(safe_sub)
+  end
+
+  def relative_path_str(source_path)
+    relative_path_obj(source_path).to_s
+  end
+
+  def dir_empty?(path)
+    path.children.empty?
+  rescue SystemCallError => e
+    log_verbose "    Warning: Could not determine if directory '#{path}' is empty - #{e.message}"
+    false
+  end
+
+  def update_progress(count)
+    return if @options[:verbose] || @options[:quiet]
+    return unless (count % @options[:progress_interval]).zero?
+
+    if @logger.respond_to?(:progress)
+      @logger.progress("Processed: #{count} items...")
+    else
+      message = "Processed: #{count} items..."
+      padding = ' ' * [0, PROGRESS_LINE_MAX_LEN - message.length].max
+      $stderr.print "\r#{message}#{padding}"
+    end
+  end
+
+  def finalize_progress
+    return if @options[:verbose] || @options[:quiet]
+
+    message = "Processed #{@processed_count} items total (out of #{@item_count} scanned)."
+    if @logger.respond_to?(:progress_done)
+      @logger.progress_done(message)
+    else
+      padding = ' ' * [0, PROGRESS_LINE_MAX_LEN - message.length].max
+      $stderr.print "\r#{message}#{padding}\n"
+    end
+  end
+
+  # Logger delegation methods
+  def log_verbose(message)
+    return if @options[:quiet]
+
+    if @logger
+      @logger.debug(message) if @options[:verbose]
+    elsif @options[:verbose]
+      warn "[VERBOSE] #{message}"
+    end
+  end
+
+  def log_output(message)
+    return if @options[:quiet]
+
+    if @logger
+      @logger.info(message)
+    else
+      puts message
+    end
+  end
+
+  def log_error(message)
+    if @logger
+      @logger.error(message)
+    else
+      warn message
+    end
+  end
+
+  def pluralize(count, singular, plural = nil)
+    plural ||= "#{singular}s"
+    count == 1 ? "#{count} #{singular}" : "#{count} #{plural}"
+  end
+end
+# rubocop:enable Metrics/ClassLength
+
+# --- Main Execution ---
+if __FILE__ == $PROGRAM_NAME
+  begin
+    parser = OptionsParser.parse(ARGV) # This now raises specific errors
+
+    # Setup a default logger (nil uses internal puts/warn)
+    default_logger = nil
+
+    cleaner = SourceCleaner.new(parser.source_dir, parser.target_dir, parser.options, logger: default_logger)
+    cleaner.run
+  rescue OptionParser::InvalidArgument, OptionParser::MissingArgument => e
+    # Catch errors specifically from OptionParser (including our custom raised one)
+    warn "Error: #{e.message}" # OptionParser errors often have good messages
+    warn 'Use -h for help.'
+    exit 1
+  rescue StandardError => e
+    # Catch other errors from Cleaner initialization/run or unexpected issues
+    warn "An unexpected error occurred: #{e.message}"
+    # Optionally add backtrace for debugging non-argument errors
+    # warn e.backtrace.join("\n\t")
+    exit 1
+  end
+end

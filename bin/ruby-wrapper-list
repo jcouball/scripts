@@ -1,0 +1,31 @@
+#!/bin/bash
+set -euo pipefail
+
+LOCAL_SHARE="$HOME/.local/share"
+
+echo "📋 Listing Ruby wrapper environments in: $LOCAL_SHARE"
+
+# Find all GEM_HOME-style directories
+for dir in "$LOCAL_SHARE"/*; do
+  [ -d "$dir" ] || continue
+  gem_dir="$dir"
+
+  # Only show if it looks like a GEM_HOME (bin/, gems/, specifications/ inside)
+  if [[ -d "$gem_dir/bin" && -d "$gem_dir/gems" ]]; then
+    echo
+    echo "🧰 Environment: $(basename "$gem_dir")"
+    echo "  Location: $gem_dir"
+
+    if [ -n "${GEM_HOME:-}" ]; then unset GEM_HOME; fi
+
+    export GEM_HOME="$gem_dir"
+    export PATH="$GEM_HOME/bin:$PATH"
+
+    if command -v gem >/dev/null; then
+      echo "  Gems installed:"
+      gem list --no-versions || echo "    (No gems found)"
+    else
+      echo "  (No gem command available)"
+    fi
+  fi
+done

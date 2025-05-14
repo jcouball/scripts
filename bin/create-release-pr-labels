@@ -1,0 +1,21 @@
+#!/bin/bash
+
+gh label create "major-change" \
+  --description "The PR introduces changes that could break code using this gem" \
+  --color 1D76DB --force
+
+gh label create "minor-change" \
+  --description "The PR adds new features, deprecates existing features, or makes substantial improvements" \
+  --color 1D76DB --force
+
+gh label create "patch-change" \
+  --description "The PR fixes bugs or makes other small changes that do not add to or change existing functionality" \
+  --color 1D76DB --force
+
+gh label create "internal-change" \
+  --description "The PR includes changes that are NOT user-facing and will NOT require a release" \
+  --color 1D76DB --force
+
+gh label create "release" \
+  --description "The PR updates files to create a new release, such as version files and CHANGELOG files" \
+  --color 1D76DB --force

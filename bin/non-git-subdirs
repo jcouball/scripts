@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Exit early if the current directory is in a Git worktree
+if git rev-parse --show-toplevel &>/dev/null; then
+  echo "This script cannot be run from a directory inside a Git worktree."
+  exit 1
+fi
+
+# Loop through each subdirectory in the current directory
+for dir in */; do
+  # Ensure the directory exists and enter it
+  if pushd "$dir" &>/dev/null; then
+
+    # Check if it is a Git worktree root
+    if git rev-parse --show-toplevel &>/dev/null; then
+      if [ "$(pwd)" != "$(git rev-parse --show-toplevel)" ]; then
+        # It's not the root directory of a Git worktree
+        echo "${dir%/}"
+      fi
+    else
+      # Not part of any Git worktree
+      echo "${dir%/}"
+    fi
+
+    # Return to the parent directory
+    popd &>/dev/null
+  else
+    echo "Failed to enter directory: $dir"
+  fi
+done

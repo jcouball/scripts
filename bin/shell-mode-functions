@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# These functions are compatible with sh, bash, and zsh
+
+is_interactive_shell() {
+  # Check if the shell is interactive via shell flags
+  case "$-" in
+    *i*) return 0 ;;  # Interactive shell
+  esac
+
+  # Check if standard input is a terminal
+  if [ -t 0 ]; then
+    return 0  # Terminal input, assume interactive
+  fi
+
+  return 1  # Non-interactive shell
+}
+
+is_login_shell() {
+  # Get the command name of the current shell process
+  shell_command=$(ps -o comm= -p $$)
+
+  # Check if the shell process is a login shell
+  if [[ "$shell_command" =~ ^- ]]; then
+    return 0 # Current shell is a login shell
+  fi
+
+  return 1
+}
+
+has_ancestor_login_shell() {
+  # Traverse the parent processes to see if any ancestor is a login shell
+  current_pid=$$
+  while [ "$current_pid" -ne 1 ]; do
+    # Get the parent process ID
+    parent_pid=$(ps -o ppid= -p "$current_pid")
+
+    # Get the command name of the parent process
+    parent_command=$(ps -o comm= -p "$parent_pid")
+
+    # Check if the parent command is a login shell
+    if [[ "$parent_command" =~ ^- ]]; then
+      return 0 # An ancestor shell is a login shell
+    fi
+
+    # Move up the process tree
+    current_pid=$parent_pid
+  done
+
+  # If no login shell is found, return false
+  return 1
+}
+
+shell_mode() {
+  # Detecting shell type
+  local shell=$(basename $(ps -p $$ -o comm= | sed 's/^-//'))
+
+  if [[ "$shell" == "zsh" ]]; then
+    echo -n "You are using zsh version ${ZSH_VERSION}"
+  elif [[ "$shell" == "bash" ]]; then
+    echo -n "You are using bash version ${BASH_VERSION}"
+  else
+    echo -n "You are using ${shell}"
+  fi
+
+  echo -n " ("
+
+  # Checking for interactive mode
+  if is_interactive_shell "$shell"; then
+    echo -n "interactive"
+  else
+    echo -n "non-interactive"
+  fi
+
+  # Checking for login mode
+  if is_login_shell "$shell"; then
+    echo -n ", login"
+  else
+    echo -n ", non-login"
+  fi
+
+  echo -n ")"
+
+  echo
+}

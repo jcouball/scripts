@@ -1,0 +1,2 @@
+#!/bin/sh
+`bundle info --path rubocop`/exe/rubocop "$@"

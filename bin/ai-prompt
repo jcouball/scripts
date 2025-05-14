@@ -1,0 +1,106 @@
+#!/usr/bin/env ruby
+
+top_level_dir = `git rev-parse --show-toplevel 2>/dev/null`.chomp
+if top_level_dir.empty? || top_level_dir != Dir.pwd
+  puts 'This script must be run from the root of a git repository.'
+  exit 1
+end
+
+
+# puts <<~STYLE_GUIDE
+#   # Style Guide
+
+#   For YARD doc:
+#   * Class, method, etc. summaries should not end in a period and should be under 80 characters.
+#   * Longer class, method. etc. descriptions should be in Markdown format.
+#   * All classes must include the “@api public” tag unless asked for a private class.
+#   * All methods should have full YARD docs including a description, params, return (including void), and raises.
+#   * All public methods must include an example.
+#   * All private methods must include the “@api private” tag.
+#   * All methods of a private class must include the “@api private” tag.
+#   * @params should have the name before the type as in “@param name [type] summary”.
+
+#   For Code:
+#   * Unused method argument should be prefixed with an underscore
+#   * Make sure all code will pass all Rubocop rules defined in this configuration: https://github.com/main-branch/main_branch_shared_rubocop_config/blob/main/config/rubocop.yml
+#   * Error messages should be written to stderr
+
+#   For RSpec tests:
+#   * Use 'described_class' to refer to the class in the top level RSpec.describe block.
+
+#   Suggest corrections to code base if it does not follow these conventions.
+# STYLE_GUIDE
+
+def output_file(file)
+  puts "#{file}:"
+  puts
+  puts '==='
+  puts File.read(file).chomp
+  puts
+  puts '==='
+  puts
+end
+
+def ruby_files
+  (
+    Dir.glob('README.md') +
+    Dir.glob("*.gemspec") +
+    Dir.glob('lib/**/*') +
+    Dir.glob('exe/**/*') +
+    Dir.glob('spec/**/*') +
+    Dir.glob('test/**/*') +
+    Dir.glob('tests/**/*')
+  ).reject { |f| File.directory?(f) }
+end
+
+def git_file?(file)
+  file.start_with?('.git/') || file.include?('/.git/')
+end
+
+def all_files
+  Dir.glob("**/*", File::FNM_DOTMATCH)
+    .reject { |f| git_file?(f) }
+    .reject { |f| File.directory?(f) }
+end
+
+def usage
+  puts <<~USAGE
+    Usage: ai-prompt [--all|--ruby|--help|-h]
+
+    --all:     Show all files in the project.
+    --ruby:    Show only Ruby files in the project.
+    --help|-h: Show this help message.
+  USAGE
+end
+
+files = []
+
+if ARGV.empty?
+  usage
+else
+  if ARGV[0] == '--all'
+    files = all_files
+  elsif ARGV[0] == '--ruby'
+    files = ruby_files
+  elsif ARGV[0] == '--help' || ARGV[0] == '-h'
+    usage
+  else
+
+    warn "Unknown argument '#{ARGV[0]}'."
+    usage
+    exit 1
+  end
+  all_files.select! { |f| ARGV.include?(f) }
+end
+
+unless files.empty?
+  project_name = File.basename(Dir.pwd)
+
+  puts <<~HEADING
+    This is my project '#{project_name}'.
+  HEADING
+
+  puts 'Here are the files from the project delimited by "==="'
+  puts
+  files.each { |f| output_file(f) }
+end

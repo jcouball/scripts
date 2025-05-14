@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Save the initial directory
+initial_dir=$(pwd)
+
+# Find all directories below the current directory
+for dir in $(find . -type d -name ".git" -prune); do
+    # Get the directory containing .git
+    repo_dir=$(dirname "$dir")
+    repo_name=$(basename "$repo_dir")
+
+    # Move to the repository directory
+    cd "$repo_dir" || continue
+
+    # Get the origin remote URL if it exists
+    origin_url=$(git remote get-url origin 2>/dev/null)
+
+    # Go back to the initial directory
+    cd "$initial_dir"
+
+    # Extract the organization and repository name
+    if [[ -n "$origin_url" ]]; then
+        # Remove any "git@github.com:" or "https://github.com/" prefix and ".git" suffix
+        org_repo=$(echo "$origin_url" | sed -E 's#(git@|https://)([^:/]+[:/])##; s/\.git$//')
+
+        # Separate organization and repo name
+        org_name=$(echo "$org_repo" | cut -d'/' -f1)
+        repo_name=$(echo "$org_repo" | cut -d'/' -f2)
+
+        # Define the target directory relative to the initial directory
+        target_dir="_${org_name}"
+
+        # Create the target directory if it doesn't exist
+        if [[ ! -d "$target_dir" ]]; then
+            mkdir "$target_dir"
+            echo "Created directory: $target_dir"
+        else
+            echo "Directory already exists: $target_dir"
+        fi
+
+        # Move the repository directory to the target location
+        mv "$repo_dir" "${target_dir}/${repo_name}"
+        echo "Moved $repo_dir to ${target_dir}/${repo_name}"
+    fi
+done

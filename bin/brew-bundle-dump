@@ -1,0 +1,4 @@
+#!/bin/bash
+
+set -x
+brew bundle dump --describe --global --all --force

@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SCRIPT_NAME="$(basename "$0")"
+
+# Make sure the script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: $SCRIPT_NAME must be run as root. Try using sudo." >&2
+  exit 1
+fi
+
+if [ ! -d /etc/profile.d ]; then
+  mkdir -p /etc/profile.d
+  chmod 755 /etc/profile.d
+  chown root:wheel /etc/profile.d
+fi

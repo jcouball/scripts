@@ -1,0 +1,168 @@
+#!/bin/bash
+
+# Run a Ruby script from a gem with a specific Ruby version and an isolated gem environment
+#
+# The script will install the Ruby version (with asdf) if it is not already installed
+# The script will create a new gem environment in $HOME/.local/share/<gem-name>
+# The script will clean and update this gem environment once a month
+# The script will install the gem and its dependencies if they are not already installed
+# The script will run the Ruby script with the specified arguments
+# Can not be run as root
+# Use -q or --quiet to suppress all non-error output from this wrapper (not from the script itself)
+# The only thing output to stdout is the output from <script-name>
+# If there is no other error before running <script-name>, this script will exit with the same exit code as <script-name>
+
+set -euo pipefail
+
+# --- Constants ---
+ASDF_CANDIDATES=(
+  "$HOME/.asdf/asdf.sh"
+  "/opt/homebrew/opt/asdf/libexec/asdf.sh"
+  "/usr/local/opt/asdf/libexec/asdf.sh"
+)
+
+QUIET=0
+
+# --- Usage function ---
+usage() {
+  echo "Usage: $0 [--quiet|-q] <ruby-version> <gem-name> <script-name> [script-args...]" >&2
+  echo >&2
+  echo "Example:" >&2
+  echo "  $0 3.4.1 create_github_release create-github-release --help" >&2
+  exit 1
+}
+
+# --- Error handler ---
+error() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+# --- Log helper (respects --quiet) ---
+log() {
+  if [[ "$QUIET" -eq 0 ]]; then
+    echo "$@" >&2
+  fi
+}
+
+# --- Load asdf environment ---
+load_asdf() {
+  for candidate in "${ASDF_CANDIDATES[@]}"; do
+    if [[ -f "$candidate" ]]; then
+      # shellcheck disable=SC1090
+      . "$candidate"
+      return
+    fi
+  done
+  error "asdf not found. Please install: https://asdf-vm.com/\nTried locations: ${ASDF_CANDIDATES[*]}"
+}
+
+# --- Ensure Ruby version via asdf ---
+install_ruby() {
+  if ! asdf where ruby "$RUBY_VERSION" > /dev/null 2>&1; then
+    log "Installing Ruby $RUBY_VERSION via asdf..."
+    asdf install ruby "$RUBY_VERSION" 1>&2
+  fi
+  ASDF_RUBY_PATH="$(asdf where ruby "$RUBY_VERSION")"
+}
+
+# --- Setup environment variables ---
+setup_environment() {
+  export GEM_HOME="$HOME/.local/share/$GEM_NAME"
+  export GEM_PATH="$GEM_HOME"
+  export BUNDLE_PATH="$GEM_HOME"
+  export BUNDLE_GEMFILE="$GEM_HOME/Gemfile"
+  export PATH="$GEM_HOME/bin:$ASDF_RUBY_PATH/bin:$PATH"
+}
+
+# --- Clean GEM_HOME monthly ---
+clean_gem_home() {
+  local clean_flag="$GEM_HOME/.last_cleaned"
+  local should_clean="no"
+
+  if [[ ! -f "$clean_flag" || $(find "$clean_flag" -mtime +30 2>/dev/null) ]]; then
+    should_clean="yes"
+  fi
+
+  if [[ "$should_clean" == "yes" ]]; then
+    log "Cleaning GEM_HOME: $GEM_HOME"
+    rm -rf "$GEM_HOME" 1>&2
+    mkdir -p "$GEM_HOME" 1>&2
+    touch "$clean_flag" 1>&2
+  fi
+}
+
+# --- Create Gemfile if needed ---
+create_gemfile() {
+  if [[ ! -f "$BUNDLE_GEMFILE" ]]; then
+    log "Creating Gemfile for $GEM_NAME"
+    cat > "$BUNDLE_GEMFILE" <<EOF
+source "https://rubygems.org"
+gem "$GEM_NAME"
+EOF
+  fi
+}
+
+# --- Ensure gem is installed ---
+bundle_gems() {
+  if ! bundle check > /dev/null 2>&1; then
+    log "Ensuring gems are installed into $GEM_HOME..."
+    if ! bundle install --quiet 1>&2; then
+      log "Bundler failed. Retrying with verbose output..."
+      bundle install 1>&2
+    fi
+  fi
+}
+
+# --- Execute script ---
+run_script() {
+  exec bundle exec "$SCRIPT_NAME" "${SCRIPT_ARGS[@]:-}"
+}
+
+# --- Main entry point ---
+main() {
+  if [[ "$EUID" -eq 0 ]]; then
+    error "This script must NOT be run as root"
+  fi
+
+  # Parse global options
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -q|--quiet)
+        QUIET=1
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        usage
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  if [[ $# -lt 3 ]]; then usage; fi
+
+  RUBY_VERSION="$1"
+  GEM_NAME="$2"
+  SCRIPT_NAME="$3"
+  shift 3
+  SCRIPT_ARGS=()
+  if [[ $# -gt 0 ]]; then
+    SCRIPT_ARGS=("$@")
+  fi
+
+  load_asdf
+  install_ruby
+  setup_environment
+  clean_gem_home
+  create_gemfile
+  bundle_gems
+  run_script
+}
+
+main "$@"

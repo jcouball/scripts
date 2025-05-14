@@ -1,0 +1,16 @@
+#!/bin/bash
+
+RUNNING_CONTAINERS=$(docker ps -q)
+if [ -n "${RUNNING_CONTAINERS}" ]; then
+    echo -n "Stopping containers ${RUNNING_CONTAINERS}..."
+    docker stop ${RUNNING_CONTAINERS}
+    echo "DONE"
+fi
+
+echo -n "Pruning containers, images, and networks..."
+docker system prune -a -f
+echo "DONE"
+
+echo -n "Pruning Volumes..."
+docker volume prune -f
+echo "DONE"

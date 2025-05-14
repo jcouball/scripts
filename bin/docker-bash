@@ -1,0 +1,39 @@
+#!/bin/bash
+
+function usage() {
+    echo
+    echo "Usage: $(basename $0) docker_image_url optional_command"
+    echo
+    echo "Example:"
+    echo "    image=docker.ouroath.com:4443/ruby/ruby-rhel7-build-container:latest"
+    echo "    $(basename $0) \${image} \"yinst ls | grep yca\""
+    echo
+    echo "If the optional command contains spaces, it must be quoted."
+}
+
+function too_many_parameters() {
+    echo
+    echo "ERROR: TOO MANY PARAMETERS"
+}
+
+if [ $# -eq 0 ]; then
+    usage
+    exit
+fi
+
+if [ $# -gt 2 ]; then
+    too_many_parameters
+    usage
+    exit 1
+fi
+
+image="$1"
+shift
+
+if [ $# -gt 0 ]; then
+    echo "docker run --rm -it --entrypoint /bin/bash  \"${image}\" -l -c \"$@\""
+    docker run --rm -it --entrypoint /bin/bash  "${image}" -l -c "$@"
+else
+    echo "docker run --rm -it --entrypoint /bin/bash  \"${image}\" -l"
+    docker run --rm -it --entrypoint /bin/bash  "${image}" -l
+fi

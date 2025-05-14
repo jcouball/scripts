@@ -1,0 +1,175 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'find'
+require 'fileutils' # Needed for FileUtils.rm
+require 'optparse'
+require 'time'
+
+module IconFileCleaner
+  TARGET_FILENAME = "Icon\r"
+
+  # CLI wrapper that parses arguments and invokes the runner.
+  class CLI
+    def initialize(argv)
+      @options = {
+        dry_run: false,
+        log_file: nil
+      }
+      @argv = argv
+    end
+
+    def call
+      parse_args
+      validate_root_dir
+
+      logger = Logger.new(@options[:log_file])
+      runner = Runner.new(@root_dir, @options[:dry_run], logger)
+      runner.call
+    end
+
+    private
+
+    def parse_args
+      parser = option_parser
+      parser.parse!(@argv)
+
+      if @argv.length != 1
+        puts 'Error: Missing directory path.'
+        puts parser
+        exit(1)
+      end
+
+      @root_dir = @argv.first
+    end
+
+    def option_parser
+      OptionParser.new do |opts|
+        opts.banner = "Usage: #{$PROGRAM_NAME} [options] <directory_path>"
+
+        opts.on('-n', '--dry-run', 'Dry run: list files without deleting.') { @options[:dry_run] = true }
+        opts.on('-l', '--log-file FILE', 'Log output to FILE.') { |file| @options[:log_file] = file }
+        opts.on_tail('-h', '--help', 'Show help message.') do
+          puts opts
+          exit
+        end
+      end
+    end
+
+    def validate_root_dir
+      return if File.directory?(@root_dir)
+
+      puts "Error: Invalid directory: #{@root_dir}"
+      exit(1)
+    end
+  end
+
+  # Logs messages to console and optional file.
+  class Logger
+    def initialize(log_file = nil)
+      @log_file_path = log_file
+      @logfile = open_logfile(log_file)
+    end
+
+    def info(msg) = log(msg, :INFO)
+    def warn(msg) = log(msg, :WARN)
+    def error(msg) = log(msg, :ERROR)
+
+    def close
+      @logfile&.close
+    end
+
+    private
+
+    def open_logfile(path)
+      return nil unless path
+
+      file = File.open(path, 'a')
+      file.sync = true # Ensure logs are written immediately
+      file
+    rescue IOError => e
+      # Log opening failure to console only, as file logging isn't available
+      puts "Warning: Failed to open log file '#{path}': #{e.message}"
+      nil
+    end
+
+    def log(msg, level)
+      timestamp = Time.now.strftime('%Y-%m-%d %H:%M:%S')
+      tag = "[#{level}]"
+      formatted = "#{timestamp} #{tag} #{msg}"
+
+      puts formatted
+      @logfile&.puts(formatted)
+    end
+  end
+
+  # Executes the file search and deletion logic.
+  class Runner
+    def initialize(root_dir, dry_run, logger)
+      @root_dir = root_dir
+      @dry_run = dry_run
+      @logger = logger
+
+      @files_found = 0
+      @files_deleted = 0
+      @errors = 0
+    end
+
+    def call
+      @logger.info("Starting search in '#{@root_dir}'...")
+
+      Find.find(@root_dir) do |path|
+        # Skip directories, symlinks, etc. and check the filename
+        next unless File.file?(path) && File.basename(path) == TARGET_FILENAME
+
+        @files_found += 1
+        @dry_run ? @logger.info("Would delete: #{path}") : delete_file(path)
+      end
+
+      summarize
+      @logger.close
+
+      # Exit with error code if any deletions failed
+      exit 1 if @errors.positive?
+    end
+
+    private
+
+    def delete_file(path)
+      FileUtils.rm(path, force: true)
+      @logger.info("Deleted: #{path}")
+      @files_deleted += 1
+    rescue StandardError => e
+      handle_delete_error(path, e)
+    end
+
+    def handle_delete_error(path, error)
+      case error
+      when Errno::EACCES # Permission denied
+        @logger.error("Permission denied: #{path}")
+      else # Catch other potential errors (disk full, etc.)
+        @logger.error("Error deleting #{path}: #{error.message}")
+      end
+      @errors += 1
+    end
+
+    def summarize
+      # This log message is now only here, which makes sense
+      @logger.info('Search complete.')
+
+      if @dry_run
+        # Use inspect to clearly show the \r character
+        @logger.info("Dry Run Summary: Found #{@files_found} #{TARGET_FILENAME.inspect} files.")
+      else
+        @logger.info('Execution Summary:')
+        @logger.info("  Files found: #{@files_found}")
+        @logger.info("  Deleted: #{@files_deleted}")
+        # Only report errors if there were any
+        @logger.error("  Errors during deletion: #{@errors}") if @errors.positive?
+      end
+    end
+  end
+end
+
+# Script entry point
+IconFileCleaner::CLI.new(ARGV).call if $PROGRAM_NAME == __FILE__

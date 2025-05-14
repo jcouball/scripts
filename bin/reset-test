@@ -1,0 +1,6 @@
+#!/bin/bash
+TEST_DIR=~/my_test
+cd ~
+rm -rf ${TEST_DIR}
+mkdir ${TEST_DIR}
+cd ${TEST_DIR}

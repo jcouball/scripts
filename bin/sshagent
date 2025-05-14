@@ -1,0 +1,50 @@
+#!/bin/bash
+
+alias killagent='sudo killall yubico-agent'
+alias ssh='sshagent_init; ssh -A '
+
+function sshagent_init() {
+  # get newest ssh-agent socket
+  OS=$(uname -s)
+  if [[ X"$OS" == X"Darwin" ]]; then
+    #ynossh -v 2>&1 | grep -E 'ERR.*(expired|No certificate)' &> /dev/null
+   # ynossh -v -o StrictHostKeyChecking=no  -X 'test' -v 2>&1 | grep -E 'ERR.*(expired|No certificate)'
+    ynossh -v -o StrictHostKeyChecking=no  -X 'test' -v 2>&1 | grep -E 'Checking certificate is not expired'
+    if [[ $? -ne 0 ]]; then
+      echo "need yinit or expired"
+      sudo killall yubico-agent
+      yubikey_new
+    fi
+    export SSH_AUTH_SOCK=$HOME/.yubiagent/sock
+  elif [[ X"$OS" == X"Linux" ]]; then
+    sshagent_socket=$(find /tmp/ssh-* -user `whoami` -type s -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1)
+    ssh_agent_info="/tmp/$(whoami).agent.info"
+    socket_time=$(echo $sshagent_socket | awk '{print $1}' | awk -F. '{print $1}')
+    socket_name=$(echo $sshagent_socket | awk '{print $2}')
+    socket_pid=$(echo $sshagent_socket | awk '{print $2}' | awk -F. '{print $2}' )
+
+    cat <<- EOF > $ssh_agent_info
+      SSH_AUTH_SOCK="$socket_name"
+      SSH_AGENT_PID="$socket_pid"
+      export SSH_AUTH_SOCK
+      export SSH_AGENT_PID
+EOF
+    source $ssh_agent_info
+
+    current_time=$(date +"%s")
+    time_diff=$(echo $current_time - $socket_time | bc)
+    # yubikey will be expired after 12 hours , need re-new again
+    if [[ $time_diff -gt 43200 ]]; then
+      echo "sshca token was expired, please go back to your MAC and re-yinit again"
+      echo "once you re-yinit and get new keys, we whould use the fresh agent"
+    fi
+  else
+    echo "This script doesn't support OS: $OS"
+    exit 255
+  fi
+}
+
+function yubikey_new() {
+  yinit --hard
+#   yinit
+}

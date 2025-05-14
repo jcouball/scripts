@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# Check if the script is being run from a directory named 'github'
+if [ "$(basename "$PWD")" != "github" ]; then
+  echo "Error: This script must be run from a directory named 'github'."
+  exit 1
+fi
+
+# Store the initial directory to return to if needed
+initial_dir="$PWD"
+
+# Ensure a repository URL is provided
+if [ -z "$1" ]; then
+  echo "Usage: gitclone <repository_url>"
+  exit 1
+fi
+
+repo_url="$1"
+
+# Extract the organization/user and repository name from the URL
+org_repo=$(echo "$repo_url" | sed -E 's|.*[:/]([^/]+)/([^/]+)(.git)?$|\1/\2|')
+org=$(echo "$org_repo" | cut -d'/' -f1)
+repo=$(echo "$org_repo" | cut -d'/' -f2)
+
+# Validate if the extraction was successful
+if [ -z "$org" ] || [ -z "$repo" ]; then
+  echo "Error: Unable to parse organization/user and repository name from the URL."
+  exit 1
+fi
+
+# Check if the organization directory already exists
+org_created=false
+if [ ! -d "$org" ]; then
+  mkdir -p "$org"
+  org_created=true
+fi
+
+# Clone the repository
+if cd "$org" && git clone "$repo_url"; then
+  echo "Successfully cloned into $(pwd)/$repo"
+else
+  # Return to the initial directory and remove the organization directory if it was created by this script
+  cd "$initial_dir" || exit
+  if [ "$org_created" = true ]; then
+    rmdir "$org" 2>/dev/null && echo "Removed $org directory since cloning failed."
+  fi
+  echo "Error: Failed to clone the repository."
+  exit 1
+fi

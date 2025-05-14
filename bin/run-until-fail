@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Function to handle Ctrl+C (SIGINT)
+handle_interrupt() {
+  echo -e "\nInterrupted by user."
+  echo "The command ran $SUCCESSFUL_RUNS times successfully before being interrupted."
+  exit 0
+}
+
+# Register the interrupt handler
+trap handle_interrupt SIGINT
+
+# Check if a command was provided
+if [ $# -eq 0 ]; then
+  echo "Run a command over and over until it fails"
+  echo
+  echo "Usage: $(basename $0) <command>"
+  echo
+  echo "Press Ctrl+C to stop."
+  echo
+  echo "Examples:"
+  echo "  $(basename $0) ls -la"
+  echo "  $(basename $0) \"grep pattern file.txt\""
+  echo "  $(basename $0) \"find . -name '*.py' -type f\""
+  echo "  $(basename $0) \"curl -s https://example.com | grep 'Example'\""
+  echo "  $(basename $0) \"psql -c 'SELECT * FROM users' | grep 'admin'\""
+  exit 0
+fi
+
+COUNT=1
+SUCCESSFUL_RUNS=0
+LOG_FILE="run-until-fail.log"
+
+# Clear log file if it exists
+> "$LOG_FILE"
+
+# For simple commands, join all arguments with spaces
+DISPLAY_CMD="$*"
+echo "Starting run of $DISPLAY_CMD..."
+
+# Run the command in a loop until it fails
+while true; do
+  # Print the current count with cursor left at the end
+  echo -ne "\rRun #$COUNT..."
+
+  # Run the command in a subshell to handle pipes, redirections, etc.
+  # while still catching the exit status
+  if ! (
+    set -e
+    "$BASH" -c "$*"
+  ) >> "$LOG_FILE" 2>&1; then
+    # If the command fails, print the final message and exit
+    echo -e "\nThe command ran $SUCCESSFUL_RUNS times before failing."
+    exit 1
+  fi
+
+  # Increment success counter
+  ((SUCCESSFUL_RUNS++))
+  # Increment run counter for next display
+  ((COUNT++))
+done
