@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/jcouball/scripts/compare/v0.1.3...v0.1.4) (2025-05-14)
+
+
+### Other Changes
+
+* **git-clone:** Enhance error handling, URL/path parsing, and cleanup logic ([cca6d5f](https://github.com/jcouball/scripts/commit/cca6d5f26e7e64893bbd3101bee3f1980e60d66a))
+
 ## [0.1.3](https://github.com/jcouball/scripts/compare/v0.1.2...v0.1.3) (2025-05-14)
 
 
