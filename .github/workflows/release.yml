@@ -1,0 +1,61 @@
+# .github/workflows/release-please.yml
+name: Release Scripts
+
+description: |
+  This workflow creates a new release on GitHub
+
+  The workflow uses the `googleapis/release-please-action` to handle the
+  release creation process and then calls the release.yml workflow in the
+  jcouball/homebrew-tap repository to update the Homebrew formula.
+
+permissions:
+  contents: write       # For release-please (create PR, release, tag)
+  pull-requests: write  # For release-please (create PR)
+  actions: write        # For gh workflow run (to pudate homebrew package)
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Secure runner
+        uses: step-security/harden-runner@c6295a65d1254861815972266d5933fd6e532bdf # v2.11.1
+        with:
+          disable-sudo: true
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            storage.googleapis.com:443
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        # Fetch all history for all tags and branches
+        with:
+          fetch-depth: 0
+
+      - name: Create release
+        uses: googleapis/release-please-action@v4
+        id: release
+
+      - name: Update homebrew-tap
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RAW_TAG_NAME: ${{ steps.release.outputs.tag_name }}
+
+        run: |
+          set -e
+          version=${RAW_TAG_NAME#v} # Removes 'v' prefix
+          echo "Running 'release.yml' in jcouball/homebrew-tap with version: ${version}"
+          gh workflow run release.yml \
+            -f version="${version}" \
+            -R jcouball/homebrew-tap
