@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/jcouball/scripts/compare/v0.1.2...v0.1.3) (2025-05-14)
+
+
+### Other Changes
+
+* Use a PAT token with more permissions instead of the default token ([e504d55](https://github.com/jcouball/scripts/commit/e504d559e381f03ba517eb1f8bbe9d1b7b78b19c))
+
 ## [0.1.2](https://github.com/jcouball/scripts/compare/v0.1.1...v0.1.2) (2025-05-14)
 
 
