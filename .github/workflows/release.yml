@@ -53,7 +53,7 @@ jobs:
       - name: Update homebrew-tap
         if: ${{ steps.release.outputs.release_created == 'true' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.AUTO_RELEASE_TOKEN }}
           RAW_TAG_NAME: ${{ steps.release.outputs.tag_name }}
           SOURCE_REPO_PATH: ${{ github.repository }}
           FORMULA_NAME: "scripts"
