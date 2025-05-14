@@ -55,11 +55,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RAW_TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          SOURCE_REPO_PATH: ${{ github.repository }}
+          FORMULA_NAME: "scripts"
 
         run: |
           set -e
           version=${RAW_TAG_NAME#v} # Removes 'v' prefix
           echo "Running 'release.yml' in jcouball/homebrew-tap with version: ${version}"
           gh workflow run release.yml \
+            -f formula_name="${FORMULA_NAME}" \
             -f version="${version}" \
+            -f source_repository_path="${SOURCE_REPO_PATH}" \
             -R jcouball/homebrew-tap
