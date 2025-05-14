@@ -1,49 +1,164 @@
 #!/bin/bash
 
-# Check if the script is being run from a directory named 'github'
-if [ "$(basename "$PWD")" != "github" ]; then
-  echo "Error: This script must be run from a directory named 'github'."
-  exit 1
+set -u # Treat unset variables as an error
+
+# --- Configuration ---
+DEFAULT_BASE_DIR="$HOME/github" # Or PWD for current directory, or make it an argument
+
+# --- Functions ---
+usage() {
+  echo "Usage: $(basename "$0") <repository_url> [target_directory_name] [--base-dir <path>]"
+  echo
+  echo "Clones a Git repository into an organization-based directory structure."
+  echo
+  echo "Arguments:"
+  echo "  <repository_url>         The URL of the Git repository to clone."
+  echo "  [target_directory_name]  Optional. Name for the cloned repository directory."
+  echo
+  echo "Options:"
+  echo "  --base-dir <path>        Specify the base directory where organization folders will be created."
+  echo "                           Defaults to '$DEFAULT_BASE_DIR'."
+  echo "  -h, --help               Show this help message."
+  # Removed exit 0 from here
+}
+
+# --- Argument Parsing ---
+REPO_URL=""
+TARGET_REPO_NAME=""
+BASE_DIR="$DEFAULT_BASE_DIR"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0 # Exit with success for help requests
+      ;;
+    --base-dir)
+      if [[ -z "$2" ]] || [[ "$2" == -* ]]; then # Also check if next arg is another option
+        echo "Error: --base-dir requires an argument." >&2
+        usage
+        exit 1 # Exit with failure
+      fi
+      BASE_DIR="$2"
+      shift 2
+      ;;
+    *)
+      if [[ -z "$REPO_URL" ]]; then
+        REPO_URL="$1"
+      elif [[ -z "$TARGET_REPO_NAME" ]]; then
+        TARGET_REPO_NAME="$1"
+      else
+        echo "Error: Too many arguments." >&2
+        usage
+        exit 1 # Exit with failure
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$REPO_URL" ]]; then
+  echo "Error: Repository URL is required." >&2
+  usage
+  exit 1 # Exit with failure
 fi
 
-# Store the initial directory to return to if needed
+# Check for git command
+command -v git >/dev/null 2>&1 || { echo "Error: git command not found. Please install Git." >&2; exit 1; }
+
+# Create base directory if it doesn't exist
+# Use quotes for paths and redirect stderr for mkdir
+mkdir -p "$BASE_DIR" 2>/dev/null || { echo "Error: Could not create or access base directory '$BASE_DIR'." >&2; exit 1; }
+
 initial_dir="$PWD"
-
-# Ensure a repository URL is provided
-if [ -z "$1" ]; then
-  echo "Usage: gitclone <repository_url>"
-  exit 1
+# Use quotes for paths and redirect stderr for cd
+if ! cd "$BASE_DIR" 2>/dev/null; then
+    echo "Error: Could not change to base directory '$BASE_DIR'." >&2
+    exit 1
 fi
-
-repo_url="$1"
+BASE_DIR_ABS="$(pwd)" # Get absolute path of base_dir
 
 # Extract the organization/user and repository name from the URL
-org_repo=$(echo "$repo_url" | sed -E 's|.*[:/]([^/]+)/([^/]+)(.git)?$|\1/\2|')
-org=$(echo "$org_repo" | cut -d'/' -f1)
-repo=$(echo "$org_repo" | cut -d'/' -f2)
+# This regex attempts to be more robust for common git URL patterns
+# Regex for git@host:org/repo.git or git@host:org/repo (without .git)
+org_repo_match_ssh=$(echo "$REPO_URL" | sed -E -e 's#^git@([^:]+):([^/]+)/([^/]+?)(\.git)?$#\2/\3#')
+# Regex for http(s)://host/org/repo.git or http(s)://host/org/repo
+org_repo_match_http=$(echo "$REPO_URL" | sed -E -e 's#^https?://[^/]+/([^/]+)/([^/]+?)(\.git)?$#\1/\2#')
 
-# Validate if the extraction was successful
-if [ -z "$org" ] || [ -z "$repo" ]; then
-  echo "Error: Unable to parse organization/user and repository name from the URL."
+if [[ "$org_repo_match_ssh" != "$REPO_URL" ]] && echo "$org_repo_match_ssh" | grep -q '/'; then
+    org_repo_match="$org_repo_match_ssh"
+elif [[ "$org_repo_match_http" != "$REPO_URL" ]] && echo "$org_repo_match_http" | grep -q '/'; then
+    org_repo_match="$org_repo_match_http"
+else
+  # Fallback or simplified parsing if the above fails or for other URL types (like local paths)
+  temp_repo_name=$(basename "$REPO_URL" .git)
+  temp_org_name=$(basename "$(dirname "$REPO_URL")")
+
+  # Ensure temp_org_name is not '.' or '/' or empty, and temp_repo_name is not empty
+  if [[ -n "$temp_org_name" ]] && [[ "$temp_org_name" != "." ]] && [[ "$temp_org_name" != "/" ]] && [[ -n "$temp_repo_name" ]]; then
+    org_repo_match="$temp_org_name/$temp_repo_name"
+  else
+    echo "Error: Unable to parse organization and repository name from URL: $REPO_URL" >&2
+    echo "Please ensure the URL is in a common format (e.g., git@host:org/repo.git or https://host/org/repo.git) or a valid path." >&2
+    cd "$initial_dir"
+    exit 1
+  fi
+fi
+
+org=$(echo "$org_repo_match" | cut -d'/' -f1)
+repo_from_url=$(echo "$org_repo_match" | cut -d'/' -f2)
+
+if [[ -z "$TARGET_REPO_NAME" ]]; then
+  TARGET_REPO_NAME="$repo_from_url"
+fi
+
+if [ -z "$org" ] || [ -z "$TARGET_REPO_NAME" ]; then
+  echo "Error: Unable to determine organization or repository name from URL: $REPO_URL" >&2
+  cd "$initial_dir"
   exit 1
 fi
 
-# Check if the organization directory already exists
+# Organization directory path
+org_dir_path="$BASE_DIR_ABS/$org"
+
+# Check if the organization directory already exists, create if not
 org_created=false
-if [ ! -d "$org" ]; then
-  mkdir -p "$org"
+if [ ! -d "$org_dir_path" ]; then
+  echo "Creating organization directory: $org_dir_path"
+  mkdir -p "$org_dir_path" || {
+    echo "Error: Failed to create organization directory '$org_dir_path'." >&2
+    cd "$initial_dir"
+    exit 1
+  }
   org_created=true
 fi
 
-# Clone the repository
-if cd "$org" && git clone "$repo_url"; then
-  echo "Successfully cloned into $(pwd)/$repo"
-else
-  # Return to the initial directory and remove the organization directory if it was created by this script
-  cd "$initial_dir" || exit
-  if [ "$org_created" = true ]; then
-    rmdir "$org" 2>/dev/null && echo "Removed $org directory since cloning failed."
-  fi
-  echo "Error: Failed to clone the repository."
+# Target repository path
+target_repo_path="$org_dir_path/$TARGET_REPO_NAME"
+
+if [ -d "$target_repo_path" ]; then
+  echo "Error: Target directory '$target_repo_path' already exists." >&2
+  cd "$initial_dir"
   exit 1
 fi
+
+echo "Cloning '$REPO_URL' into '$target_repo_path'..."
+if git clone "$REPO_URL" "$target_repo_path"; then
+  echo "Successfully cloned into $target_repo_path"
+else
+  echo "Error: Failed to clone the repository from '$REPO_URL'." >&2
+  if [ "$org_created" = true ] && [ -d "$org_dir_path" ]; then
+    # Check if org directory is empty before attempting to remove it
+    if [ -z "$(ls -A "$org_dir_path")" ]; then # Check if directory is empty
+      echo "Removing an empty organization directory that was created: $org_dir_path"
+      rmdir "$org_dir_path" || echo "Warning: Could not remove empty organization directory '$org_dir_path'." >&2
+    else
+      echo "Notice: Organization directory '$org_dir_path' was created but is not empty. Partial clone data might exist in '$target_repo_path'." >&2
+    fi
+  fi
+  cd "$initial_dir"
+  exit 1
+fi
+
+cd "$initial_dir"
+exit 0 # Explicitly exit with success at the end of successful execution
