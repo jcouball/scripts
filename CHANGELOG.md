@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/jcouball/scripts/compare/v0.1.6...v0.1.7) (2025-05-15)
+
+
+### Features
+
+* Allow git-branch-prune to skip user confirmation ([03e7e92](https://github.com/jcouball/scripts/commit/03e7e9209d4d1c4ecca0b037535a72d797fee021))
+
 ## [0.1.6](https://github.com/jcouball/scripts/compare/v0.1.5...v0.1.6) (2025-05-15)
 
 
