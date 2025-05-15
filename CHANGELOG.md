@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/jcouball/scripts/compare/v0.1.7...v0.1.8) (2025-05-15)
+
+
+### Features
+
+* **git-branch-prune:** Add --quiet mode ([7c004d8](https://github.com/jcouball/scripts/commit/7c004d84656bf593288319f81d80618762b79b8b))
+
 ## [0.1.7](https://github.com/jcouball/scripts/compare/v0.1.6...v0.1.7) (2025-05-15)
 
 
