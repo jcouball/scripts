@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/jcouball/scripts/compare/v0.1.4...v0.1.5) (2025-05-15)
+
+
+### Features
+
+* Add the git-branch-prune command ([e007e35](https://github.com/jcouball/scripts/commit/e007e354e1544f0fea59048ba894e608104765bd))
+
 ## [0.1.4](https://github.com/jcouball/scripts/compare/v0.1.3...v0.1.4) (2025-05-14)
 
 
