@@ -35,33 +35,27 @@ for arg in "$@"; do
   case "$arg" in
     -h|--help)
       SHOW_HELP=true
-      # No 'break' here, so all arguments are checked for validity.
-      # If an invalid arg is found later, script will exit with error.
       ;;
     --force)
       DELETE_OPTION="$FORCE_DELETE_OPTION"
       ;;
     *)
-      # Unrecognized option or argument
       echo "Error: Unrecognized option or argument: '$arg'" >&2
-      echo >&2 # Add a blank line for readability before help text
+      echo >&2
       show_help
       exit 1
       ;;
   esac
 done
 
-# This block is reached only if all arguments were valid options (or no arguments were given)
 if [ "$SHOW_HELP" = true ]; then
   show_help
-  exit 0 # Exit successfully after showing help if no errors were encountered
+  exit 0
 fi
 
 # --- Main Script Logic ---
 
-# 1. Get the current branch name
 current_branch_name=""
-# Try to get the current branch name; if in detached HEAD, symbolic-ref fails or returns HEAD
 current_branch_name_temp=$(git symbolic-ref --short HEAD 2>/dev/null || true)
 if [ "$current_branch_name_temp" != "HEAD" ] && [ -n "$current_branch_name_temp" ]; then
     current_branch_name="$current_branch_name_temp"
@@ -71,7 +65,6 @@ if [ -z "$current_branch_name" ]; then
     echo "Info: Currently in a detached HEAD state or current branch could not be determined. No branch will be skipped based on 'current branch' status."
 fi
 
-# 2. Prune remote-tracking branches
 echo "Updating remote-tracking branches with 'git fetch --prune'..."
 if ! git fetch --prune; then
   echo "Error: 'git fetch --prune' failed. Please check your Git setup and remote connection." >&2
@@ -79,11 +72,9 @@ if ! git fetch --prune; then
 fi
 echo
 
-# 3. Identify all local branches whose upstream remote is 'gone'
 echo "Identifying local branches whose upstream remote has been deleted..."
-all_gone_branch_candidates=$(git branch -vv | grep ': gone]' | awk '{if ($1 == "*") {print $2} else {print $1}}')
+all_gone_branch_candidates=$(git branch -vv | (grep ': gone]' || true) | awk '{if ($1 == "*") {print $2} else {print $1}}')
 
-# 4. Filter out the current branch and build the final list
 final_branches_to_delete_list=""
 current_branch_was_candidate_and_skipped=false
 
@@ -95,25 +86,22 @@ if [ -n "$all_gone_branch_candidates" ]; then
       if [ -z "$final_branches_to_delete_list" ]; then
         final_branches_to_delete_list="$branch_name"
       else
-        # Append with a newline for xargs and the display loop
         final_branches_to_delete_list="${final_branches_to_delete_list}
 ${branch_name}"
       fi
     fi
-  done <<< "$all_gone_branch_candidates" # Process multi-line string from command substitution
+  done <<< "$all_gone_branch_candidates"
 fi
 
 if [ "$current_branch_was_candidate_and_skipped" = true ]; then
-  echo # for spacing
+  echo
   echo "Info: Deletion of '$current_branch_name' will be skipped since it is the current branch."
 fi
 
-# This is the variable the rest of the script will use
 gone_branches="$final_branches_to_delete_list"
 
-# 5. Check if any branches are left to delete
 if [ -z "$gone_branches" ]; then
-  echo # for spacing
+  echo
   if [ "$current_branch_was_candidate_and_skipped" = true ]; then
     echo "No other local branches (besides the skipped current branch) were found for deletion."
   else
@@ -122,31 +110,23 @@ if [ -z "$gone_branches" ]; then
   exit 0
 fi
 
-# 6. Inform the user about branches to be deleted and ask for confirmation
-echo # for spacing
+echo
 echo "The following local branches are targeted for deletion using the '${DELETE_OPTION}' option:"
-# Loop to print each branch on a new line for better readability
 while IFS= read -r branch_to_display; do
-  # This check ensures we don't print an empty line if $gone_branches somehow ends up with just newlines
   if [ -n "$branch_to_display" ]; then
     echo "  - $branch_to_display"
   fi
 done <<< "$gone_branches"
-echo # for spacing
+echo
 
 read -r -p "Are you sure you want to delete these branches? (yes/NO): " confirmation
 
-# Convert confirmation to lowercase for case-insensitive comparison
 if [[ "$(echo "$confirmation" | tr '[:upper:]' '[:lower:]')" != "yes" ]]; then
   echo "Aborted by user. No branches were deleted."
   exit 0
 fi
 
-# 7. Delete the identified branches
 echo "Deleting branches..."
-# Use echo to pass the newline-separated list of branches to xargs
-# xargs -r ensures 'git branch' is not run if $gone_branches is empty (though we already check this).
-# The '--' tells xargs that no more options for xargs itself will follow.
 echo "$gone_branches" | xargs -r -- git branch "$DELETE_OPTION"
 
 echo "Selected local branches have been processed for deletion."
