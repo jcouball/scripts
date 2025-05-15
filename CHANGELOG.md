@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/jcouball/scripts/compare/v0.1.5...v0.1.6) (2025-05-15)
+
+
+### Bug Fixes
+
+* Fix an error where grep failing in a pipeline (which is expected) would fail the script ([1e403ab](https://github.com/jcouball/scripts/commit/1e403aba2f2ed2f05d6b3e1e046ac8c27f9f47c6))
+
 ## [0.1.5](https://github.com/jcouball/scripts/compare/v0.1.4...v0.1.5) (2025-05-15)
 
 
