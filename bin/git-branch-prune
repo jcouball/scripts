@@ -9,6 +9,7 @@ FORCE_DELETE_OPTION="-D"   # Option for forced delete
 # --- Variables ---
 DELETE_OPTION="$DEFAULT_DELETE_OPTION"
 SHOW_HELP=false
+SKIP_CONFIRMATION=false # New variable for skipping confirmation
 
 # --- Functions ---
 
@@ -26,6 +27,7 @@ Options:
   --force     Force delete branches. This uses 'git branch -D' instead of 'git branch -d'.
               Use with caution, as this will delete branches even if they are
               not fully merged. (The current branch will still be skipped).
+  -y, --yes   Skip user confirmation and proceed with deletion directly.
   -h, --help  Display this help message and exit.
 EOF
 }
@@ -38,6 +40,9 @@ for arg in "$@"; do
       ;;
     --force)
       DELETE_OPTION="$FORCE_DELETE_OPTION"
+      ;;
+    -y|--yes) # New case for --yes and -y
+      SKIP_CONFIRMATION=true
       ;;
     *)
       echo "Error: Unrecognized option or argument: '$arg'" >&2
@@ -119,14 +124,19 @@ while IFS= read -r branch_to_display; do
 done <<< "$gone_branches"
 echo
 
-read -r -p "Are you sure you want to delete these branches? (yes/NO): " confirmation
-
-if [[ "$(echo "$confirmation" | tr '[:upper:]' '[:lower:]')" != "yes" ]]; then
-  echo "Aborted by user. No branches were deleted."
-  exit 0
+# Modified confirmation logic
+if [ "$SKIP_CONFIRMATION" = true ]; then
+  echo "Confirmation automatically given due to --yes/-y flag."
+else
+  read -r -p "Are you sure you want to delete these branches? (yes/NO): " confirmation
+  if [[ "$(echo "$confirmation" | tr '[:upper:]' '[:lower:]')" != "yes" ]]; then
+    echo "Aborted by user. No branches were deleted."
+    exit 0
+  fi
 fi
 
 echo "Deleting branches..."
 echo "$gone_branches" | xargs -r -- git branch "$DELETE_OPTION"
 
 echo "Selected local branches have been processed for deletion."
+exit 0
