@@ -9,11 +9,19 @@ FORCE_DELETE_OPTION="-D"   # Option for forced delete
 # --- Variables ---
 DELETE_OPTION="$DEFAULT_DELETE_OPTION"
 SHOW_HELP=false
-SKIP_CONFIRMATION=false # New variable for skipping confirmation
+EXPLICIT_YES=false      # Was -y or --yes explicitly passed?
+QUIET_MODE=false        # Is -q or --quiet active?
 
 # --- Functions ---
 
-# Function to display help message
+# Central logging function for informational output
+log_message() {
+  if [ "$QUIET_MODE" = false ]; then
+    printf "%s\n" "$1" # Using printf for safer output than echo
+  fi
+}
+
+# Function to display help message (uses direct echo, not log_message)
 show_help() {
   cat << EOF
 Usage: $(basename "$0") [options]
@@ -24,11 +32,13 @@ This script automatically runs 'git fetch --prune' before checking for branches
 to ensure the local view of remote branches is up to date.
 
 Options:
-  --force     Force delete branches. This uses 'git branch -D' instead of 'git branch -d'.
-              Use with caution, as this will delete branches even if they are
-              not fully merged. (The current branch will still be skipped).
-  -y, --yes   Skip user confirmation and proceed with deletion directly.
-  -h, --help  Display this help message and exit.
+  -f, --force   Force delete branches. This uses 'git branch -D' instead of 'git branch -d'.
+                Use with caution. (The current branch will still be skipped).
+  -y, --yes     Skip user confirmation and proceed with deletion directly.
+  -q, --quiet   Quiet mode. Suppress all informational output from this script and from
+                git commands (e.g., 'Deleted branch...'). Implies --yes if
+                confirmation would normally be required. Error messages are still shown.
+  -h, --help    Display this help message and exit.
 EOF
 }
 
@@ -38,15 +48,18 @@ for arg in "$@"; do
     -h|--help)
       SHOW_HELP=true
       ;;
-    --force)
+    -f|--force) # Updated to include -f
       DELETE_OPTION="$FORCE_DELETE_OPTION"
       ;;
-    -y|--yes) # New case for --yes and -y
-      SKIP_CONFIRMATION=true
+    -y|--yes)
+      EXPLICIT_YES=true
+      ;;
+    -q|--quiet)
+      QUIET_MODE=true
       ;;
     *)
       echo "Error: Unrecognized option or argument: '$arg'" >&2
-      echo >&2
+      echo >&2 # Blank line for readability
       show_help
       exit 1
       ;;
@@ -67,17 +80,24 @@ if [ "$current_branch_name_temp" != "HEAD" ] && [ -n "$current_branch_name_temp"
 fi
 
 if [ -z "$current_branch_name" ]; then
-    echo "Info: Currently in a detached HEAD state or current branch could not be determined. No branch will be skipped based on 'current branch' status."
+    log_message "Info: Currently in a detached HEAD state or current branch could not be determined. No branch will be skipped based on 'current branch' status."
 fi
 
-echo "Updating remote-tracking branches with 'git fetch --prune'..."
-if ! git fetch --prune; then
-  echo "Error: 'git fetch --prune' failed. Please check your Git setup and remote connection." >&2
+# --- Modified git fetch execution ---
+git_fetch_command_array=("git" "fetch" "--prune")
+if [ "$QUIET_MODE" = true ]; then
+  git_fetch_command_array+=("-q")
+fi
+
+log_message "Executing: ${git_fetch_command_array[*]}"
+if ! "${git_fetch_command_array[@]}"; then
+  # This error message goes to stderr and is not silenced by QUIET_MODE
+  echo "Error: Command '${git_fetch_command_array[*]}' failed. Please check your Git setup and remote connection." >&2
   exit 1
 fi
-echo
+log_message "" # Blank line
 
-echo "Identifying local branches whose upstream remote has been deleted..."
+log_message "Identifying local branches whose upstream remote has been deleted..."
 all_gone_branch_candidates=$(git branch -vv | (grep ': gone]' || true) | awk '{if ($1 == "*") {print $2} else {print $1}}')
 
 final_branches_to_delete_list=""
@@ -99,44 +119,51 @@ ${branch_name}"
 fi
 
 if [ "$current_branch_was_candidate_and_skipped" = true ]; then
-  echo
-  echo "Info: Deletion of '$current_branch_name' will be skipped since it is the current branch."
+  log_message "" # Blank line
+  log_message "Info: Deletion of '$current_branch_name' will be skipped since it is the current branch."
 fi
 
 gone_branches="$final_branches_to_delete_list"
 
 if [ -z "$gone_branches" ]; then
-  echo
+  log_message "" # Blank line
   if [ "$current_branch_was_candidate_and_skipped" = true ]; then
-    echo "No other local branches (besides the skipped current branch) were found for deletion."
+    log_message "No other local branches (besides the skipped current branch) were found for deletion."
   else
-    echo "No local branches found that are tracking a remote branch which has been deleted."
+    log_message "No local branches found that are tracking a remote branch which has been deleted."
   fi
   exit 0
 fi
 
-echo
-echo "The following local branches are targeted for deletion using the '${DELETE_OPTION}' option:"
-while IFS= read -r branch_to_display; do
-  if [ -n "$branch_to_display" ]; then
-    echo "  - $branch_to_display"
-  fi
-done <<< "$gone_branches"
-echo
+log_message "" # Blank line
+log_message "The following local branches are targeted for deletion using the '${DELETE_OPTION}' option:"
+if [ "$QUIET_MODE" = false ]; then # Only list branches if not in quiet mode
+  while IFS= read -r branch_to_display; do
+    if [ -n "$branch_to_display" ]; then
+      log_message "  - $branch_to_display" # log_message will handle quietness
+    fi
+  done <<< "$gone_branches"
+fi
+log_message "" # Blank line
 
-# Modified confirmation logic
-if [ "$SKIP_CONFIRMATION" = true ]; then
-  echo "Confirmation automatically given due to --yes/-y flag."
-else
-  read -r -p "Are you sure you want to delete these branches? (yes/NO): " confirmation
-  if [[ "$(echo "$confirmation" | tr '[:upper:]' '[:lower:]')" != "yes" ]]; then
-    echo "Aborted by user. No branches were deleted."
-    exit 0
-  fi
+# --- Confirmation Logic ---
+if ! "$EXPLICIT_YES" && ! "$QUIET_MODE"; then
+    read -r -p "Are you sure you want to delete these branches? (yes/NO): " confirmation
+    if [[ "$(echo "$confirmation" | tr '[:upper:]' '[:lower:]')" != "yes" ]]; then
+        log_message "Aborted by user. No branches were deleted."
+        exit 0
+    fi
+elif "$EXPLICIT_YES" && ! "$QUIET_MODE"; then
+    log_message "Confirmation automatically given due to --yes/-y flag."
 fi
 
-echo "Deleting branches..."
-echo "$gone_branches" | xargs -r -- git branch "$DELETE_OPTION"
+log_message "Deleting branches..."
+# --- Modified git branch execution (via xargs) ---
+if [ "$QUIET_MODE" = true ]; then
+  echo "$gone_branches" | xargs -r -- git branch -q "$DELETE_OPTION"
+else
+  echo "$gone_branches" | xargs -r -- git branch "$DELETE_OPTION"
+fi
 
-echo "Selected local branches have been processed for deletion."
+log_message "Selected local branches have been processed for deletion."
 exit 0
