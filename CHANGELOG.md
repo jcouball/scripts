@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.9](https://github.com/jcouball/scripts/compare/v0.1.8...v0.1.9) (2025-07-13)
+
+
+### Features
+
+* Add upgrade-all script to update Homebrew and Mac App Store apps ([de83aa3](https://github.com/jcouball/scripts/commit/de83aa3820baa3dffa6fad62c4fbaf5826da1576))
+* Update ai-prompt script to create prompt from an ERB template ([3776e23](https://github.com/jcouball/scripts/commit/3776e23b512a62e8567eb90a23d1089aedce8c16))
+
+
+### Other Changes
+
+* Describe the scripts included in this homebrew formula ([1ff6220](https://github.com/jcouball/scripts/commit/1ff6220cf681615fc203dfd0c0ed9336a4c06b15))
+
 ## [0.1.8](https://github.com/jcouball/scripts/compare/v0.1.7...v0.1.8) (2025-05-15)
 
 
