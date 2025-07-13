@@ -1,0 +1,25 @@
+I have created a project that includes a set of scripts and tools that I find useful
+for various tasks.
+
+I would like to generate a document (scripts.html) which describes the purpose of
+each script in the bin directory. This document should be in html format that is
+compatible with conversion to GitHub markdown using the command `pandoc scripts.html
+-f html -t markdown -o SCRIPTS.md`.
+
+<%=
+  file_patterns = %w[
+      .github/**/*
+      bin/**/*
+      .commitlintrc.yml
+      .gitignore
+      .markdownlint.yml
+      .release-please-manifest.json
+      CHANGELOG.md
+      LICENSE.txt
+      README.md
+      release-please-config.json
+      *.gemspec
+  ]
+
+  project_to_s(file_patterns:)
+%>
