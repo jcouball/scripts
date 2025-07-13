@@ -1,106 +1,173 @@
 #!/usr/bin/env ruby
 
+require 'stringio'
+
 top_level_dir = `git rev-parse --show-toplevel 2>/dev/null`.chomp
 if top_level_dir.empty? || top_level_dir != Dir.pwd
   puts 'This script must be run from the root of a git repository.'
   exit 1
 end
 
-
-# puts <<~STYLE_GUIDE
-#   # Style Guide
-
-#   For YARD doc:
-#   * Class, method, etc. summaries should not end in a period and should be under 80 characters.
-#   * Longer class, method. etc. descriptions should be in Markdown format.
-#   * All classes must include the “@api public” tag unless asked for a private class.
-#   * All methods should have full YARD docs including a description, params, return (including void), and raises.
-#   * All public methods must include an example.
-#   * All private methods must include the “@api private” tag.
-#   * All methods of a private class must include the “@api private” tag.
-#   * @params should have the name before the type as in “@param name [type] summary”.
-
-#   For Code:
-#   * Unused method argument should be prefixed with an underscore
-#   * Make sure all code will pass all Rubocop rules defined in this configuration: https://github.com/main-branch/main_branch_shared_rubocop_config/blob/main/config/rubocop.yml
-#   * Error messages should be written to stderr
-
-#   For RSpec tests:
-#   * Use 'described_class' to refer to the class in the top level RSpec.describe block.
-
-#   Suggest corrections to code base if it does not follow these conventions.
-# STYLE_GUIDE
-
-def output_file(file)
-  puts "#{file}:"
-  puts
-  puts '==='
-  puts File.read(file).chomp
-  puts
-  puts '==='
-  puts
+unless system('command -v pbcopy > /dev/null 2>&1')
+  warn 'pbcopy not found or not executable. This script is intended for macOS.'
+  exit 1
 end
 
-def ruby_files
-  (
-    Dir.glob('README.md') +
-    Dir.glob("*.gemspec") +
-    Dir.glob('lib/**/*') +
-    Dir.glob('exe/**/*') +
-    Dir.glob('spec/**/*') +
-    Dir.glob('test/**/*') +
-    Dir.glob('tests/**/*')
-  ).reject { |f| File.directory?(f) }
-end
+require 'erb'
+require 'open3'
 
-def git_file?(file)
-  file.start_with?('.git/') || file.include?('/.git/')
-end
+# Defines the context in which the ERB template will be evaluated.
+# You can add instance variables here, and they will be available in your ERB file.
+class TemplateContext
+  def initialize
+    @current_user = ENV['USER'] || 'User'
+  end
 
-def all_files
-  Dir.glob("**/*", File::FNM_DOTMATCH)
-    .reject { |f| git_file?(f) }
-    .reject { |f| File.directory?(f) }
+  def get_binding
+    binding
+  end
+
+  def project_to_s(project_name: Dir.pwd, file_patterns: ruby_project_files)
+    output = StringIO.new
+
+    output << <<~HEADER
+      This is my project '#{project_name}'
+
+      Here are the files from the project delimited by "===":
+
+    HEADER
+
+    files =
+      file_patterns.flat_map do |pattern|
+        Dir.glob(pattern, File::FNM_DOTMATCH)
+          .reject { |f| File.directory?(f) }
+          .reject { |f| git_file?(f) }
+      end
+
+    files.each { |f| output << file_to_s(file: f) }
+
+    output.string
+  end
+
+  def file_to_s(file:)
+    <<~FILE
+      #{file}:
+
+      ===
+      #{File.read(file).chomp}
+      ===
+
+    FILE
+  end
+
+  def ruby_project_files
+    %w[
+      .github/**/*
+      .commitlintrc.yml
+      .markdownlint.yml
+      .release-please-manifest.json
+      .rspec
+      .rubocop.yml
+      CHANGELOG.md
+      Gemfile
+      LICENSE.txt
+      package.json
+      Rakefile
+      README.md
+      release-please-config.json
+      *.gemspec
+      bin/**/*
+      exe/**/*
+      lib/**/*
+      spec/**/*
+      test/**/*
+      tests/**/*
+    ].freeze
+  end
+
+  def all_files
+    %w[**/*].freeze
+  end
+
+  def git_file?(file)
+    file.start_with?('.git/') || file.include?('/.git/')
+  end
 end
 
 def usage
   puts <<~USAGE
-    Usage: ai-prompt [--all|--ruby|--help|-h]
+    Usage: ai-prompt [--help|-h] [<erb_file>]
 
-    --all:     Show all files in the project.
-    --ruby:    Show only Ruby files in the project.
-    --help|-h: Show this help message.
+    Generate an AI prompt from an ERB template and copy it to the clipboard
+
+    <erb_file>: The ERB template file to process. Defaults to 'ai-prompt.erb'.
+    --help|-h:  Show this help message.
+
+    ERB methods available:
+      <%=
+        # Returns a formatted string of the project name and files
+        project_name = 'Project Name'      # Default is current directory name
+        file_patterns = ruby_project_files # Default is common Ruby project files
+        project_to_s(project_name:, file_patterns:)
+      %>
+      <%=
+        # Return a formatted string of a single file's contents
+        file_to_s(file:)    # Outputs the contents of a single file
+      %>
+      <%
+        ruby_project_files # An array of glob patterns for common Ruby files
+        all_files          # An array of glob patterns for all files
+      %>
+
+    Example ai-prompt.erb file:
+      I am writing a Ruby gem that provides a ruby interface to the git command line tool.
+      See the project code below.
+
+      Write an announcement for the architecture redesign of the gem to be
+      placed in the README.md file in the section "Architecture Redesign
+      Announcement". This announcement should be short, concise, and to the
+      point and should introduce and link to the redesign documents found in
+      the project's `redesign` directory.
+
+      <%=
+        file_patterns = %w[
+          Gemfile
+          Rakefile
+          README.md
+          *.gemspec
+          lib/**/*
+          redesign/*
+        ]
+
+        output_project(file_patterns:)
+      %>
   USAGE
 end
 
-files = []
-
-if ARGV.empty?
+if ARGV[0] == '--help' || ARGV[0] == '-h'
   usage
-else
-  if ARGV[0] == '--all'
-    files = all_files
-  elsif ARGV[0] == '--ruby'
-    files = ruby_files
-  elsif ARGV[0] == '--help' || ARGV[0] == '-h'
-    usage
-  else
-
-    warn "Unknown argument '#{ARGV[0]}'."
-    usage
-    exit 1
-  end
-  all_files.select! { |f| ARGV.include?(f) }
+  exit 0
 end
 
-unless files.empty?
-  project_name = File.basename(Dir.pwd)
+erb_file_name = ARGV[0] || 'ai-prompt.erb'
 
-  puts <<~HEADING
-    This is my project '#{project_name}'.
-  HEADING
+begin
+  erb_template_content = File.read(erb_file_name)
+rescue => e
+  puts "Error reading file: #{e.message}"
+  exit 1
+end
 
-  puts 'Here are the files from the project delimited by "==="'
-  puts
-  files.each { |f| output_file(f) }
+context = TemplateContext.new
+renderer = ERB.new(erb_template_content, trim_mode: "-") # trim_mode cleans up whitespace
+processed_output = renderer.result(context.get_binding)
+
+begin
+  IO.popen('pbcopy', 'w') do |pipe|
+    pipe.write(processed_output)
+  end
+  puts "Prompt has been output to the clipboard."
+rescue Errno::ENOENT
+  puts "Error: 'pbcopy' command not found. This script is intended for macOS."
+  exit 1
 end
