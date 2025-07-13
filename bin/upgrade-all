@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Update Homebrew, and upgrade Homebrew packages and Mac App Store apps
+
+set -euo pipefail
+
+box_out() {
+  local s="$1"
+
+  # The length of the string plus padding
+  local len=$((${#s} + 2))
+
+  # Create the top, middle, and bottom parts of the box using heavy lines.
+  local top="┏$(printf '━%.0s' $(seq 1 $len))┓"
+  local middle="┃ $s ┃"
+  local bottom="┗$(printf '━%.0s' $(seq 1 $len))┛"
+
+  # Print the box to the screen.
+  echo "$top"
+  echo "$middle"
+  echo "$bottom"
+}
+
+box_out "Update Homebrew"
+brew update
+echo "DONE"
+echo
+
+box_out "Upgrade installed formulae"
+brew upgrade
+echo "DONE"
+echo
+
+box_out "Cleanup old versions"
+brew cleanup
+echo "DONE"
+echo
+
+box_out "Upgrade Mac App Store apps"
+mas upgrade
+echo "DONE"
+echo
+
+echo
+echo "ALL UPGRADES COMPLETED"
