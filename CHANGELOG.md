@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/jcouball/scripts/compare/v0.1.10...v0.1.11) (2025-07-23)
+
+
+### Bug Fixes
+
+* Fix display of Mac App Store app name ([1181e8c](https://github.com/jcouball/scripts/commit/1181e8c0cec3cf3e5ea707091dae6270e2f20a12))
+
 ## [0.1.10](https://github.com/jcouball/scripts/compare/v0.1.9...v0.1.10) (2025-07-23)
 
 
