@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/jcouball/scripts/compare/v0.1.9...v0.1.10) (2025-07-23)
+
+
+### Bug Fixes
+
+* Call mas upgrade for every installed mas application ([e199ec9](https://github.com/jcouball/scripts/commit/e199ec9aa00d1933a64bc1dcf4ad412262ddceb2))
+
 ## [0.1.9](https://github.com/jcouball/scripts/compare/v0.1.8...v0.1.9) (2025-07-13)
 
 
