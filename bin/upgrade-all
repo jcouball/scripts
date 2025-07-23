@@ -37,7 +37,16 @@ echo "DONE"
 echo
 
 box_out "Upgrade Mac App Store apps"
-mas upgrade
+mas list | while IFS= read -r line; do
+  app_id=$(echo "$line" | awk '{print $1}')
+  app_name=$(echo "$line" | cut -d' ' -f2-)
+
+  if [[ -n "$app_id" ]]; then
+    echo -n "Attempting to upgrade '$app_name' (ID: $app_id)..."
+    mas upgrade --verbose "$app_id"
+    echo "DONE"
+  fi
+done
 echo "DONE"
 echo
 
