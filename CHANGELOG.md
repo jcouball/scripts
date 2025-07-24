@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/jcouball/scripts/compare/v0.1.11...v0.2.0) (2025-07-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* use brew-upgrade-all to upgrade brew packages and Mac App store packages
+
+### Bug Fixes
+
+* Make `brew upgrade` be greedy so it updates all out-of-date packages ([7eb4e2c](https://github.com/jcouball/scripts/commit/7eb4e2c2fbe32e231abc223fd054a5c867e5956d))
+
 ## [0.1.11](https://github.com/jcouball/scripts/compare/v0.1.10...v0.1.11) (2025-07-23)
 
 
