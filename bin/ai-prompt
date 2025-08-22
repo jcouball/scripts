@@ -139,7 +139,7 @@ def usage
           redesign/*
         ]
 
-        output_project(file_patterns:)
+        project_to_s(file_patterns:)
       %>
   USAGE
 end
