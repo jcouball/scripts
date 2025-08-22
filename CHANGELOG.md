@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1](https://github.com/jcouball/scripts/compare/v0.2.0...v0.2.1) (2025-08-22)
+
+
+### Features
+
+* Add the asdf-updates command ([fd78db8](https://github.com/jcouball/scripts/commit/fd78db817b0b094ef9eec69c5a5b98f135ac744e))
+
+
+### Bug Fixes
+
+* Fix typo in the help output of the ai-prompt command ([9e11db9](https://github.com/jcouball/scripts/commit/9e11db9105ad2b4534b0946cc58087d0c43a5433))
+
 ## [0.2.0](https://github.com/jcouball/scripts/compare/v0.1.11...v0.2.0) (2025-07-24)
 
 
