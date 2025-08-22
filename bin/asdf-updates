@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# A script to check for and apply updates to tools managed by asdf.
+#
+# Usage:
+#   asdf-updates              - Check for available updates.
+#   asdf-updates -u, --update - Apply and install available updates.
+#   asdf-updates -h, --help   - Display this help message.
+
+set -e
+set -o pipefail
+
+# --- Constants ---
+# Use tput to check for color support and set color variables.
+if tput setaf 1 >&/dev/null; then
+  NC="\033[0m" # No Color
+  RED="\033[0;31m"
+  GREEN="\033[0;32m"
+  YELLOW="\033[0;33m"
+else
+  NC=""
+  RED=""
+  GREEN=""
+  YELLOW=""
+fi
+
+TOOL_VERSIONS_FILE="$HOME/.tool-versions"
+
+# --- Functions ---
+
+# Displays the help message for the script.
+show_help() {
+  cat << EOF
+Usage: $(basename "$0") [-u|--update] [-h|--help]
+
+A script to check for new versions of asdf tools listed in ~/.tool-versions.
+
+  -u, --update    Updates the ~/.tool-versions file with the latest versions and
+                  installs them.
+  -h, --help      Display this help message and exit.
+
+Without any flags, the script lists the tools, their current versions, and
+the latest available version if an update is available.
+EOF
+}
+
+# Processes a single tool entry from the .tool-versions file.
+process_tool() {
+  local tool="$1"
+  local current_version="$2"
+  local update_mode="$3"
+
+  local latest_version
+  latest_version=$(asdf latest "$tool")
+
+  if [[ "$current_version" != "$latest_version" ]]; then
+    tools_to_update+=("$tool")
+    if [ "$update_mode" = true ]; then
+      echo -e "${YELLOW}Updating $tool from $current_version to $latest_version...${NC}"
+      asdf set --home "$tool" "$latest_version"
+      asdf install "$tool" "$latest_version"
+    else
+      echo -e "$tool $current_version ${RED}=>${NC} ${GREEN}$latest_version${NC}"
+    fi
+  else
+    echo -e "$tool ${GREEN}$current_version${NC}"
+  fi
+}
+
+# --- Main Execution ---
+main() {
+  # --- Source asdf.sh to load the asdf function ---
+  local ASDF_DIR="${ASDF_DIR:-$HOME/.asdf}"
+  if [ -f "$ASDF_DIR/asdf.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$ASDF_DIR/asdf.sh"
+  else
+    echo "Error: asdf.sh not found in $ASDF_DIR. Please check your asdf installation." >&2
+    exit 1
+  fi
+
+  local UPDATE_MODE=false
+
+  # A robust case statement for argument parsing.
+  case "$1" in
+    -u|--update)
+      UPDATE_MODE=true
+      ;;
+    -h|--help)
+      show_help
+      exit 0
+      ;;
+    "")
+      # No arguments, proceed with check-only mode.
+      ;;
+    *)
+      echo "Error: Invalid argument '$1'" >&2
+      show_help
+      exit 1
+      ;;
+  esac
+
+  tools_to_update=()
+  echo "Checking for updates..."
+  echo "---"
+
+  while read -r tool current_version; do
+    # Skip comments and empty lines
+    if [[ -z "$tool" || "$tool" == "#"* ]]; then
+      continue
+    fi
+    process_tool "$tool" "$current_version" "$UPDATE_MODE"
+  done < "$TOOL_VERSIONS_FILE"
+
+  echo "---"
+
+  # --- Summary Output ---
+  if [ "$UPDATE_MODE" = false ]; then
+    if [ ${#tools_to_update[@]} -gt 0 ]; then
+      local summary
+      summary=$(printf ", %s" "${tools_to_update[@]}")
+      summary=${summary:2} # Remove leading comma and space
+      echo ""
+      echo -e "${YELLOW}$summary need to be updated.${NC}"
+      echo "Run with the --update flag to apply updates."
+    else
+      echo -e "${GREEN}All tools are up-to-date.${NC}"
+    fi
+  else
+    if [ ${#tools_to_update[@]} -gt 0 ]; then
+      echo -e "${GREEN}Update complete.${NC}"
+    else
+      echo "All tools were already up-to-date. No changes made."
+    fi
+  fi
+}
+
+# Call the main function with all script arguments.
+main "$@"
