@@ -1,0 +1,133 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'ostruct'
+
+# This class is responsible for parsing command-line arguments and creating
+# the `bundle gem` command.
+class GemCreator
+  # Defines the default options passed to `bundle gem`.
+  # These will be merged with and can be overridden by user-provided options.
+  DEFAULT_OPTIONS = {
+    changelog: true,
+    ci:        'github',
+    coc:       true,
+    git:       true,
+    github_username: 'jcouball',
+    linter:    'rubocop',
+    mit:       true,
+    test:      'rspec',
+    dry_run:   false # Default dry_run to false
+  }.freeze
+
+  def self.run
+    new.run
+  end
+
+  def run
+    # Parse options and get the project name from the remaining arguments.
+    options = parse_options
+    project_name = ARGV.shift
+
+    # Ensure a project name was provided.
+    unless project_name
+      puts "Error: PROJECT_NAME is required."
+      puts @option_parser # Show the help message
+      exit 1
+    end
+
+    # Build the final command.
+    command = build_command(project_name, options)
+
+    # If it's a dry run, just print the command. Otherwise, execute it.
+    if options.dry_run
+      puts command.join(' ')
+    else
+      execute_command(command)
+    end
+  end
+
+  private
+
+  # Uses Ruby's standard OptionParser to define and parse CLI arguments.
+  def parse_options
+    # Start with our defaults.
+    options = OpenStruct.new(DEFAULT_OPTIONS)
+
+    @option_parser = OptionParser.new do |opts|
+      opts.banner = "Usage: #{File.basename(__FILE__)} [OPTIONS] PROJECT_NAME"
+      opts.separator ""
+      opts.separator "Creates a new gem using `bundle gem` with sensible defaults."
+      opts.separator "All options below can be overridden using --[no-]option or --option=value."
+      opts.separator ""
+      opts.separator "Specific options (defaults in parentheses):"
+
+      # --- Boolean Switches ---
+      opts.on('--[no-]changelog', "Generate a CHANGELOG.md file (default: #{DEFAULT_OPTIONS[:changelog]})") { |v| options.changelog = v }
+      opts.on('--[no-]coc',       "Generate a CODE_OF_CONDUCT.md file (default: #{DEFAULT_OPTIONS[:coc]})") { |v| options.coc = v }
+      opts.on('--[no-]git',       "Initialize a git repo (default: #{DEFAULT_OPTIONS[:git]})") { |v| options.git = v }
+      opts.on('--[no-]mit',       "Generate an MIT license (default: #{DEFAULT_OPTIONS[:mit]})") { |v| options.mit = v }
+
+      # --- Options that take arguments (with --no- variants) ---
+      opts.on('--ci=CI_PROVIDER', "CI provider to use (default: #{DEFAULT_OPTIONS[:ci]})") { |v| options.ci = v }
+      opts.on('--no-ci', 'Do not generate a CI workflow') { options.ci = false }
+
+      opts.on('--github-username=USERNAME', "GitHub username for README (default: #{DEFAULT_OPTIONS[:github_username]})") { |v| options.github_username = v }
+      opts.on('--no-github-username', 'Do not specify a GitHub username') { options.github_username = false }
+
+      opts.on('--linter=LINTER', "Linter to use (default: #{DEFAULT_OPTIONS[:linter]})") { |v| options.linter = v }
+      opts.on('--no-linter', 'Do not configure a linter') { options.linter = false }
+
+      opts.on('--test=FRAMEWORK', "Test framework to use (default: #{DEFAULT_OPTIONS[:test]})") { |v| options.test = v }
+      opts.on('--no-test', 'Do not create a test directory') { options.test = false }
+
+      opts.separator ""
+      opts.separator "Execution options:"
+
+      opts.on('--[no-]dry-run', 'Print the command without executing it') { |v| options.dry_run = v }
+
+      opts.on_tail('-h', '--help', 'Show this help message') do
+        puts opts
+        exit
+      end
+    end
+
+    @option_parser.parse!
+    options
+  end
+
+  # Constructs the final `bundle gem` command array from the options hash.
+  def build_command(project_name, options)
+    command = ['bundle', 'gem', project_name]
+
+    options.each_pair do |key, value|
+      # Don't create a command-line flag for the dry_run option itself.
+      next if key == :dry_run
+
+      # Normalize the key from `github_username` to `github-username`.
+      flag_base = key.to_s.gsub('_', '-')
+
+      # Skip any option whose value is `nil`.
+      next if value.nil?
+
+      if value == true
+        command << "--#{flag_base}"
+      elsif value == false
+        command << "--no-#{flag_base}"
+      else
+        command << "--#{flag_base}=#{value}"
+      end
+    end
+
+    command
+  end
+
+  # Prints and executes the command.
+  def execute_command(command)
+    puts "Executing: #{command.join(' ')}"
+    system(*command)
+  end
+end
+
+# Run the script
+GemCreator.run
