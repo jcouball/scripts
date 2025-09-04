@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/jcouball/scripts/compare/v0.2.1...v0.2.2) (2025-09-04)
+
+
+### Features
+
+* Add bundle-gem script to create a gem using bundle gem with sensable defaults ([1bfc0b3](https://github.com/jcouball/scripts/commit/1bfc0b30518da9f44ac0edc3976a8c87cd1350c1))
+
 ## [0.2.1](https://github.com/jcouball/scripts/compare/v0.2.0...v0.2.1) (2025-08-22)
 
 
