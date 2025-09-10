@@ -19,32 +19,80 @@ notify() {
   echo "$bottom"
 }
 
-notify "Updating Homebrew"
-brew update
-echo "DONE"
+# Checks if Homebrew has pending updates.
+# Returns 0 (true) if an update is needed, 1 (false) otherwise.
+brew_needs_update() {
+  # Run the check in a subshell to avoid changing the script's working directory.
+  (
+    cd "$(brew --repo)" || return 1
+    # Silently fetch the latest data from the remote server.
+    git fetch --quiet
+    # Compare the local commit hash with the remote one.
+    # The exit code of this comparison will be the function's return value.
+    [[ $(git rev-parse HEAD) != $(git rev-parse '@{u}') ]]
+  )
+}
 
-notify "Upgrading installed Homebrew packages"
-brew upgrade --greedy
-echo "DONE"
-
-notify "Cleaning up old Homebrew packages"
-brew cleanup
-echo "DONE"
-
-notify "Upgrading Mac App Store apps"
-mas list | while IFS= read -r line; do
-  app_id=$(echo "$line" | awk '{print $1}')
-
-  # Extract the part after the ID and then clean up spaces
-  # This pattern matches the App ID and then captures everything until the last opening parenthesis
-  app_name=$(echo "$line" | sed -E 's/^[0-9]+[[:space:]]*(.*)[[:space:]]+\([0-9]+\.[0-9.]+\)$/\1/' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-  if [[ -n "$app_id" ]]; then
-    echo -n "Attempting to upgrade '$app_name' (ID: $app_id)..."
-    mas upgrade --verbose "$app_id"
+update_brew() {
+  notify "Updating Homebrew"
+  if brew_needs_update; then
+    brew update
   fi
-  echo "OK"
-done
-echo "DONE"
+  echo "DONE"
+}
 
+upgrade_brew_packages() {
+  notify "Upgrading installed Homebrew packages"
+  brew upgrade --greedy
+  echo "DONE"
+}
+
+brew_cleanup() {
+  notify "Running brew cleanup"
+  brew cleanup
+  echo "DONE"
+}
+
+upgrade_mas_apps() {
+  notify "Upgrading Mac App Store apps"
+  # Use local to ensure the array is scoped to this function.
+  local outdated_app_ids_array=()
+
+  while IFS= read -r app_id; do
+    outdated_app_ids_array+=("$app_id")
+  done < <(mas outdated | awk '{print $1}')
+
+  if [[ ${#outdated_app_ids_array[@]} -gt 0 ]]; then
+    echo "The following App Store apps will be upgraded:"
+    mas upgrade --verbose "${outdated_app_ids_array[@]}"
+  fi
+  echo "DONE"
+}
+
+# More verbose version of upgrading mac app store apps that upgrades one by one.
+upgrade_mas_apps_verbose() {
+  notify "Upgrading Mac App Store apps (Verbose)"
+  mas list | while IFS= read -r line; do
+    local app_id
+    local app_name
+
+    app_id=$(echo "$line" | awk '{print $1}')
+
+    # Extract the part after the ID and then clean up spaces
+    # This pattern matches the App ID and then captures everything until the last opening parenthesis
+    app_name=$(echo "$line" | sed -E 's/^[0-9]+[[:space:]]*(.*)[[:space:]]+\([0-9]+\.[0-9.]+\)$/\1/' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+    if [[ -n "$app_id" ]]; then
+      echo -n "Attempting to upgrade '$app_name' (ID: $app_id)..."
+      mas upgrade --verbose "$app_id"
+    fi
+    echo "OK"
+  done
+  echo "DONE"
+}
+
+update_brew
+upgrade_brew_packages
+brew_cleanup
+upgrade_mas_apps
 notify "ALL UPGRADES COMPLETED"
