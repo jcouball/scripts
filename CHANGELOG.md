@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/jcouball/scripts/compare/v0.2.2...v0.2.3) (2025-09-10)
+
+
+### Other Changes
+
+* Move all functionality of brew-upgrade-all into functions ([400143f](https://github.com/jcouball/scripts/commit/400143fe98069b9d476f323478e3673280bedb93))
+
 ## [0.2.2](https://github.com/jcouball/scripts/compare/v0.2.1...v0.2.2) (2025-09-04)
 
 
