@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/jcouball/scripts/compare/v0.2.3...v0.2.4) (2025-09-15)
+
+
+### Other Changes
+
+* Give a reminder in a comment why the brew_needs_update function is used ([3a9f044](https://github.com/jcouball/scripts/commit/3a9f0442986ccf3ccb877f32d107b50497080950))
+
 ## [0.2.3](https://github.com/jcouball/scripts/compare/v0.2.2...v0.2.3) (2025-09-10)
 
 
