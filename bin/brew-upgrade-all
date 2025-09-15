@@ -35,6 +35,8 @@ brew_needs_update() {
 
 update_brew() {
   notify "Updating Homebrew"
+  # Silently check to see if brew needs to be updated to avoid `brew update`
+  # outputting "Already up-to-date."
   if brew_needs_update; then
     brew update
   fi
