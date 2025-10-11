@@ -19,19 +19,47 @@ notify() {
   echo "$bottom"
 }
 
-# Checks if Homebrew has pending updates.
+# Checks if the main Homebrew repository has pending updates.
 # Returns 0 (true) if an update is needed, 1 (false) otherwise.
-brew_needs_update() {
-  # Run the check in a subshell to avoid changing the script's working directory.
+main_repo_needs_update() {
   (
     cd "$(brew --repo)" || return 1
-    # Silently fetch the latest data from the remote server.
     git fetch --quiet
-    # Compare the local commit hash with the remote one.
-    # The exit code of this comparison will be the function's return value.
+    # Directly compare local and remote commit hashes.
+    # The exit code of [[...]] will be the function's return code.
     [[ $(git rev-parse HEAD) != $(git rev-parse '@{u}') ]]
   )
 }
+
+# Checks if a specific Homebrew tap has pending updates.
+# Returns 0 (true) if an update is needed, 1 (false) otherwise.
+tap_needs_update() {
+  local tap_name="$1"
+  (
+    cd "$(brew --repo "$tap_name")" || return 1
+    git fetch --quiet
+    [[ $(git rev-parse HEAD) != $(git rev-parse '@{u}') ]]
+  )
+}
+
+# Checks if Homebrew OR any of its taps have pending updates.
+# Returns 0 (true) if an update is needed, 1 (false) otherwise.
+brew_needs_update() {
+  if main_repo_needs_update; then
+    return 0 # An update is needed.
+  fi
+
+  # If the main repo is fine, check all installed taps
+  for tap in $(brew tap); do
+    if tap_needs_update "$tap"; then
+      return 0 # An update is needed.
+    fi
+  done
+
+  # No updates needed, return false (1).
+  return 1
+}
+
 
 update_brew() {
   notify "Updating Homebrew"
