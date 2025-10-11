@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/jcouball/scripts/compare/v0.3.1...v0.3.2) (2025-10-11)
+
+
+### Bug Fixes
+
+* Bypass brew environment sanitization for asdf ([42a463f](https://github.com/jcouball/scripts/commit/42a463fd1b7dea0dd8db4196521d28a2c156b10a))
+
 ## [0.3.1](https://github.com/jcouball/scripts/compare/v0.3.0...v0.3.1) (2025-10-11)
 
 
