@@ -1,4 +1,34 @@
 #!/bin/bash
 
-set -x
-brew bundle dump --describe --global --all --force
+# Attempt to source the asdf script if it exists
+# Redirect brew's stderr to /dev/null to prevent errors if asdf is not installed
+ASDF_BREW_PREFIX=$(brew --prefix asdf 2>/dev/null)
+if [[ -n "$ASDF_BREW_PREFIX" ]]; then
+  ASDF_SCRIPT_PATH="$ASDF_BREW_PREFIX/libexec/asdf.sh"
+  if [ -f "$ASDF_SCRIPT_PATH" ]; then
+    . "$ASDF_SCRIPT_PATH"
+  fi
+fi
+
+# Prepare the PATH variable that the brew command will use
+path_to_use="$PATH"
+
+# Check if the asdf command is available in our environment
+if command -v asdf >/dev/null; then
+  # If asdf exists, construct a new PATH that bypasses the asdf shims
+
+  # Remove the asdf shims directory from the current PATH
+  path_without_shims=$(echo "$PATH" | sed -e "s|$ASDF_DATA_DIR/shims:||g" -e "s|:$ASDF_DATA_DIR/shims||g")
+
+  # Get the real installation paths for all currently active asdf tools
+  direct_tool_paths=$(asdf where 2>/dev/null | awk 'NF >= 2 {print $2 "/bin"}' | tr '\n' ':')
+
+  path_to_use="${direct_tool_paths}${path_without_shims}"
+fi
+
+# Execute the brew command using the PATH we prepared above
+(
+  export PATH="$path_to_use"
+  set -x
+  brew bundle dump --describe --global --all --force
+)
