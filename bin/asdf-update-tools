@@ -1,11 +1,14 @@
 #!/bin/bash
 
-# A script to check for and apply updates to tools managed by asdf.
+# A script to check for and apply updates to tools managed by asdf
+#
+# For tools that are not at their latest version in ~/.tool-versions,
+# updates ~/.tool-versions AND installs the latest version of the tool.
 #
 # Usage:
-#   asdf-updates              - Check for available updates.
-#   asdf-updates -u, --update - Apply and install available updates.
-#   asdf-updates -h, --help   - Display this help message.
+#   asdf-update-tools             - Check for available updates.
+#   asdf-update-tools -u|--update - Apply and install available updates.
+#   asdf-updates -h|--help        - Display this help message.
 
 set -e
 set -o pipefail
@@ -33,7 +36,10 @@ show_help() {
   cat << EOF
 Usage: $(basename "$0") [-u|--update] [-h|--help]
 
-A script to check for new versions of asdf tools listed in ~/.tool-versions.
+A script to check for and apply updates to tools managed by asdf
+
+For tools that are not at their latest version in ~/.tool-versions,
+updates ~/.tool-versions AND installs the latest version of the tool.
 
   -u, --update    Updates the ~/.tool-versions file with the latest versions and
                   installs them.
@@ -81,7 +87,6 @@ main() {
 
   local UPDATE_MODE=false
 
-  # A robust case statement for argument parsing.
   case "$1" in
     -u|--update)
       UPDATE_MODE=true
