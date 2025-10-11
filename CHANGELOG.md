@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0](https://github.com/jcouball/scripts/compare/v0.2.3...v0.3.0) (2025-10-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* rename asdf-updates to asdf-update-tools
+
+### Features
+
+* Rename asdf-updates to asdf-update-tools ([dcbdf1f](https://github.com/jcouball/scripts/commit/dcbdf1fd09370e6cca5a41278c6fb0dcf9d53481))
+
+
+### Other Changes
+
+* Give a reminder in a comment why the brew_needs_update function is used ([3a9f044](https://github.com/jcouball/scripts/commit/3a9f0442986ccf3ccb877f32d107b50497080950))
+
 ## [0.2.3](https://github.com/jcouball/scripts/compare/v0.2.2...v0.2.3) (2025-09-10)
 
 
