@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/jcouball/scripts/compare/v0.3.0...v0.3.1) (2025-10-11)
+
+
+### Features
+
+* Update brew if any tap is outdated ([af70237](https://github.com/jcouball/scripts/commit/af702375d774474a90ab9c591af818d2a827374f))
+
 ## [0.3.0](https://github.com/jcouball/scripts/compare/v0.2.3...v0.3.0) (2025-10-11)
 
 
