@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/jcouball/scripts/compare/v0.3.2...v0.3.3) (2026-03-15)
+
+
+### Features
+
+* **git-amend:** Add script to safely amend commits on the current branch ([081f297](https://github.com/jcouball/scripts/commit/081f297e01b84c0c8360511ce6009d9e57200ea1))
+
 ## [0.3.2](https://github.com/jcouball/scripts/compare/v0.3.1...v0.3.2) (2025-10-11)
 
 
