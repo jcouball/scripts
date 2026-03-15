@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+COMMIT="${1:-}"
+
+if [[ -z "$COMMIT" ]]; then
+  echo "Usage: git-fixup <commit>" >&2
+  exit 1
+fi
+
+# Resolve to a full SHA
+SHA=$(git rev-parse --verify "$COMMIT^{commit}" 2>/dev/null) || {
+  echo "error: '$COMMIT' is not a valid commit" >&2
+  exit 1
+}
+
+# Determine the current branch
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null) || {
+  echo "error: not on a branch (detached HEAD)" >&2
+  exit 1
+}
+
+# Look up the default branch from the remote tracking ref
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||') || {
+  echo "error: cannot determine default branch (run: git remote set-head origin --auto)" >&2
+  exit 1
+}
+
+# Error if already on the default branch
+if [[ "$CURRENT_BRANCH" == "$DEFAULT_BRANCH" ]]; then
+  echo "error: cannot fixup commits on the default branch '$DEFAULT_BRANCH'" >&2
+  exit 1
+fi
+
+# Find where the current branch diverged from the default branch
+MERGE_BASE=$(git merge-base HEAD "origin/$DEFAULT_BRANCH") || {
+  echo "error: cannot find common ancestor with 'origin/$DEFAULT_BRANCH'" >&2
+  exit 1
+}
+
+# Commit must be reachable from HEAD
+if ! git merge-base --is-ancestor "$SHA" HEAD; then
+  echo "error: commit $SHA is not on the current branch" >&2
+  exit 1
+fi
+
+# Commit must be after the divergence point (not in shared history with default branch)
+if git merge-base --is-ancestor "$SHA" "$MERGE_BASE"; then
+  echo "error: commit $SHA is not on the current branch after it diverged from '$DEFAULT_BRANCH'" >&2
+  exit 1
+fi
+
+# Check there are staged changes
+if git diff --cached --quiet; then
+  echo "error: no staged changes" >&2
+  exit 1
+fi
+
+git commit --fixup="$SHA"
+GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash "$SHA~1"
