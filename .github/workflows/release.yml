@@ -37,7 +37,7 @@ jobs:
             storage.googleapis.com:443
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         # Fetch all history for all tags and branches
         with:
           fetch-depth: 0
