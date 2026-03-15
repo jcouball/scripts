@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/jcouball/scripts/compare/v0.3.3...v0.3.4) (2026-03-15)
+
+
+### Other Changes
+
+* Update dependencies for the build ([a8a7bf3](https://github.com/jcouball/scripts/commit/a8a7bf3c28128f5f2d477a0228c2ee03decc2d20))
+
 ## [0.3.3](https://github.com/jcouball/scripts/compare/v0.3.2...v0.3.3) (2026-03-15)
 
 
