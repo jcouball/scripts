@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.9](https://github.com/jcouball/scripts/compare/v0.3.8...v0.3.9) (2026-04-24)
+
+
+### Features
+
+* Add code-shell-startup-files script ([be7ac8a](https://github.com/jcouball/scripts/commit/be7ac8a9a010dda9407ff052fad0a6b0af257be1))
+
 ## [0.3.8](https://github.com/jcouball/scripts/compare/v0.3.7...v0.3.8) (2026-04-24)
 
 
