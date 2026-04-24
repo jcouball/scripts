@@ -19,6 +19,11 @@ on:
       - main
 
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Re-run homebrew-tap update for this tag (e.g. v1.2.3). Leave empty on normal push-triggered runs."
+        required: false
+        default: ""
 
 jobs:
   release:
@@ -50,11 +55,25 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      - name: Resolve tag name
+        id: resolve_tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag_name }}" ]]; then
+            tag="${{ github.event.inputs.tag_name }}"
+            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Error: tag_name must be a v-prefixed semver tag (e.g. v1.2.3), got: '${tag}'" >&2
+              exit 1
+            fi
+            echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ steps.release.outputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Update homebrew-tap
-        if: ${{ steps.release.outputs.release_created == 'true' }}
+        if: ${{ steps.release.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name != '') }}
         env:
           GH_TOKEN: ${{ secrets.AUTO_RELEASE_TOKEN }}
-          RAW_TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          RAW_TAG_NAME: ${{ steps.resolve_tag.outputs.tag }}
           SOURCE_REPO_PATH: ${{ github.repository }}
           FORMULA_NAME: "scripts"
 
