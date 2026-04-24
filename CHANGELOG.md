@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.7](https://github.com/jcouball/scripts/compare/v0.3.6...v0.3.7) (2026-04-24)
+
+
+### Other Changes
+
+* Allow manual re-run of homebrew-tap update step ([0716b32](https://github.com/jcouball/scripts/commit/0716b3222afe94cc8bb21ed034d54eb4f8d8e0ca))
+
 ## [0.3.6](https://github.com/jcouball/scripts/compare/v0.3.5...v0.3.6) (2026-04-24)
 
 
