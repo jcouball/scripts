@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.5](https://github.com/jcouball/scripts/compare/v0.3.4...v0.3.5) (2026-04-24)
+
+
+### Features
+
+* Add github-list-repos-with-secret and github-set-repo-secret scripts ([59d899e](https://github.com/jcouball/scripts/commit/59d899edf1ff8cf2a7c2db78116f35565cae2f96))
+
 ## [0.3.4](https://github.com/jcouball/scripts/compare/v0.3.3...v0.3.4) (2026-03-15)
 
 
