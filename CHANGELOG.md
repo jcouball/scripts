@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.6](https://github.com/jcouball/scripts/compare/v0.3.5...v0.3.6) (2026-04-24)
+
+
+### Other Changes
+
+* Update ci build dependencies ([b6418b0](https://github.com/jcouball/scripts/commit/b6418b02a7dc1810ac601e27d3e91a4db21bdf1c))
+
 ## [0.3.5](https://github.com/jcouball/scripts/compare/v0.3.4...v0.3.5) (2026-04-24)
 
 
