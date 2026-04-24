@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.8](https://github.com/jcouball/scripts/compare/v0.3.7...v0.3.8) (2026-04-24)
+
+
+### Other Changes
+
+* **dependencies:** Update dependencies for all GitHub Actions workflows ([5998e40](https://github.com/jcouball/scripts/commit/5998e4048c4e5e8542809754b893392d1c3c4d77))
+
 ## [0.3.7](https://github.com/jcouball/scripts/compare/v0.3.6...v0.3.7) (2026-04-24)
 
 
