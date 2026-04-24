@@ -1,0 +1,58 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SCRIPT_NAME="$(basename "$0")"
+
+# Shell profile file patterns matched against chezmoi-managed destination paths.
+# Paths from 'chezmoi managed' are relative to the home directory (e.g. '.bashrc'),
+# so patterns use (^|/) to match both with and without a leading slash.
+PROFILE_PATTERNS=(
+  '(^|/)\.bashrc$'
+  '(^|/)\.bash_profile$'
+  '(^|/)\.bash_login$'
+  '(^|/)\.bash_logout$'
+  '(^|/)\.profile$'
+  '(^|/)\.zshrc$'
+  '(^|/)\.zprofile$'
+  '(^|/)\.zshenv$'
+  '(^|/)\.zlogin$'
+  '(^|/)\.zlogout$'
+  '/fish/config\.fish$'
+  '/fish/conf\.d/[^/]+\.fish$'
+  '(^|/)\.kshrc$'
+  '(^|/)\.tcshrc$'
+  '(^|/)\.cshrc$'
+)
+
+# Ensure chezmoi is available
+if ! command -v chezmoi &>/dev/null; then
+  echo "$SCRIPT_NAME: chezmoi is not installed or not in PATH" >&2
+  exit 1
+fi
+
+# Ensure the VS Code 'code' shell command is available
+if ! command -v code &>/dev/null; then
+  echo "$SCRIPT_NAME: 'code' command not found — install VS Code and enable the shell command" >&2
+  exit 1
+fi
+
+# Collect shell profile files tracked by chezmoi
+# 'chezmoi managed' outputs paths relative to the destination (home) directory
+destination="$(chezmoi target-path)"
+files_to_open=()
+while IFS= read -r file; do
+  for pattern in "${PROFILE_PATTERNS[@]}"; do
+    if [[ "$file" =~ $pattern ]]; then
+      files_to_open+=("${destination}/${file}")
+      break
+    fi
+  done
+done < <(chezmoi managed --include=files 2>/dev/null)
+
+if [ ${#files_to_open[@]} -eq 0 ]; then
+  echo "$SCRIPT_NAME: No shell startup files tracked by chezmoi were found"
+  exit 0
+fi
+
+code "${files_to_open[@]}"
