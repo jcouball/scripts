@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.10](https://github.com/jcouball/scripts/compare/v0.3.9...v0.3.10) (2026-06-01)
+
+
+### Bug Fixes
+
+* Remove unsupported --all flag from brew bundle dump ([26c1ecd](https://github.com/jcouball/scripts/commit/26c1ecd484e8fc5d8cee8bc07675a32a540acf63))
+
 ## [0.3.9](https://github.com/jcouball/scripts/compare/v0.3.8...v0.3.9) (2026-04-24)
 
 
