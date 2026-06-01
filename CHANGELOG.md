@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.11](https://github.com/jcouball/scripts/compare/v0.3.10...v0.3.11) (2026-06-01)
+
+
+### Bug Fixes
+
+* Support Homebrew-based asdf install in asdf-update-tools ([4585e66](https://github.com/jcouball/scripts/commit/4585e66ed5798641952a8b8b0a43f5ef4ebe084a))
+
 ## [0.3.10](https://github.com/jcouball/scripts/compare/v0.3.9...v0.3.10) (2026-06-01)
 
 
