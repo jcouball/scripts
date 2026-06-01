@@ -30,5 +30,5 @@ fi
 (
   export PATH="$path_to_use"
   set -x
-  brew bundle dump --describe --global --all --force
+  brew bundle dump --describe --global --force
 )
