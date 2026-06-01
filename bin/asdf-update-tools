@@ -75,13 +75,9 @@ process_tool() {
 
 # --- Main Execution ---
 main() {
-  # --- Source asdf.sh to load the asdf function ---
-  local ASDF_DIR="${ASDF_DIR:-$HOME/.asdf}"
-  if [ -f "$ASDF_DIR/asdf.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$ASDF_DIR/asdf.sh"
-  else
-    echo "Error: asdf.sh not found in $ASDF_DIR. Please check your asdf installation." >&2
+  # --- Ensure asdf is available ---
+  if ! command -v asdf &>/dev/null; then
+    echo "Error: asdf not found. Please check your asdf installation." >&2
     exit 1
   fi
 
