@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.12](https://github.com/jcouball/scripts/compare/v0.3.11...v0.3.12) (2026-06-24)
+
+
+### Bug Fixes
+
+* **brew-bundle-dump:** Update for Homebrew v6 ([b63ac04](https://github.com/jcouball/scripts/commit/b63ac04c84c7a8007e6be847ac07e3742d16ec4a))
+
 ## [0.3.11](https://github.com/jcouball/scripts/compare/v0.3.10...v0.3.11) (2026-06-01)
 
 
