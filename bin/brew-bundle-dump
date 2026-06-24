@@ -11,24 +11,39 @@ if [[ -n "$ASDF_BREW_PREFIX" ]]; then
 fi
 
 # Prepare the PATH variable that the brew command will use
-path_to_use="$PATH"
+PATH_TO_USE="$PATH"
 
 # Check if the asdf command is available in our environment
 if command -v asdf >/dev/null; then
   # If asdf exists, construct a new PATH that bypasses the asdf shims
 
   # Remove the asdf shims directory from the current PATH
-  path_without_shims=$(echo "$PATH" | sed -e "s|$ASDF_DATA_DIR/shims:||g" -e "s|:$ASDF_DATA_DIR/shims||g")
+  PATH_WITHOUT_SHIMS=$(echo "$PATH" | sed -e "s|$ASDF_DATA_DIR/shims:||g" -e "s|:$ASDF_DATA_DIR/shims||g")
 
   # Get the real installation paths for all currently active asdf tools
-  direct_tool_paths=$(asdf where 2>/dev/null | awk 'NF >= 2 {print $2 "/bin"}' | tr '\n' ':')
+  DIRECT_TOOL_PATHS=$(asdf where 2>/dev/null | awk 'NF >= 2 {print $2 "/bin"}' | tr '\n' ':')
 
-  path_to_use="${direct_tool_paths}${path_without_shims}"
+  PATH_TO_USE="${DIRECT_TOOL_PATHS}${PATH_WITHOUT_SHIMS}"
+fi
+
+# Verify Homebrew is version 6.0 or later (brew bundle --describe was deprecated in v6)
+MIN_BREW_VERSION=6.0
+
+BREW_VERSION=$(PATH="$PATH_TO_USE" brew --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+BREW_MAJOR=$(echo "$BREW_VERSION" | cut -d. -f1)
+BREW_MINOR=$(echo "$BREW_VERSION" | cut -d. -f2)
+MIN_BREW_MAJOR=$(echo "$MIN_BREW_VERSION" | cut -d. -f1)
+MIN_BREW_MINOR=$(echo "$MIN_BREW_VERSION" | cut -d. -f2)
+if [[ -z "$BREW_MAJOR" ]] || \
+   [[ "$BREW_MAJOR" -lt "$MIN_BREW_MAJOR" ]] || \
+   [[ "$BREW_MAJOR" -eq "$MIN_BREW_MAJOR" && "$BREW_MINOR" -lt "$MIN_BREW_MINOR" ]]; then
+  echo "Error: Homebrew version ${MIN_BREW_VERSION} or later is required (found: ${BREW_VERSION:-unknown})" >&2
+  exit 1
 fi
 
 # Execute the brew command using the PATH we prepared above
 (
-  export PATH="$path_to_use"
+  export PATH="$PATH_TO_USE"
   set -x
-  brew bundle dump --describe --global --force
+  brew bundle dump --global --force
 )
