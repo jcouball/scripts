@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.13](https://github.com/jcouball/scripts/compare/v0.3.12...v0.3.13) (2026-07-29)
+
+
+### Features
+
+* Add git-pr-cleanup script ([b855da0](https://github.com/jcouball/scripts/commit/b855da0078b2f072efcdc51df4b58420b8fdc300))
+
 ## [0.3.12](https://github.com/jcouball/scripts/compare/v0.3.11...v0.3.12) (2026-06-24)
 
 
